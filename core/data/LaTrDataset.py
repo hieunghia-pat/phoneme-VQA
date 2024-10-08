@@ -72,7 +72,7 @@ class LaTrDataset(BaseDataset):
 
         
         for i in range(len(dataframe)):
-            input_ids, tokenized_ocr, coordinates, attention_mask, ocr_attention_mask = self.create_features(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
+            input_ids, tokenized_ocr, coordinates, src_attention_mask, ocr_attention_mask = self.create_features(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
 
             answer_encoding = self.tokenizer("<pad> " + dataframe['answer'][i].strip(),
                                                 padding='max_length',
@@ -85,7 +85,7 @@ class LaTrDataset(BaseDataset):
             self.data['input_ids'].append(input_ids)
             self.data['tokenized_ocr'].append(tokenized_ocr)
             self.data['coordinates'].append(coordinates)
-            self.data['src_attention_mask'].append(attention_mask)
+            self.data['src_attention_mask'].append(src_attention_mask)
             self.data['ocr_attention_mask'].append(ocr_attention_mask)
 
 
@@ -134,7 +134,7 @@ class LaTrDataset(BaseDataset):
 
         coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
-        ocr_attention_mask = [1]*len(bbox_according_to_ocr_ids) + [0]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        ocr_attention_mask = [1]*(len(bbox_according_to_ocr_ids)+1) + [0]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
         
 
 
