@@ -21,8 +21,8 @@ def textlayout_ocr_adapt(ocr_root, h_scale=1000, w_scale=1000):
 
         bboxes = []
 
-        height = o['height']
-        width = o['width']
+        height = 1#o['height']
+        width = 1#o['width']
 
         for i in range(len(pre_bboxes)):
 
