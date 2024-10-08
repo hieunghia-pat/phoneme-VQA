@@ -10,10 +10,10 @@ BETAS:
   - 0.9
   - 0.98
 
-warmup_step: 5000
+warmup_step: 2000
 
 NUM_EPOCHS: 5
-TRAIN_BATCH_SIZE: 8
+TRAIN_BATCH_SIZE: 16
 EVAL_BATCH_SIZE: 16
 PREDICT_BATCH_SIZE: 16
 
@@ -24,8 +24,8 @@ get_predict_score: TRUE
 
 ##DATA
 ocr_path: "./ocr"
-max_ocr: 140
-max_q_length: 40
+max_ocr: 
+max_q_length: 180
 max_a_length: 128
 
 base_img_path: "./latr_img"
