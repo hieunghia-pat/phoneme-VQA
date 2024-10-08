@@ -1,1 +1,1 @@
-from .LaTr import LaTr
+from .LaTr import LaTr, LaTr_config

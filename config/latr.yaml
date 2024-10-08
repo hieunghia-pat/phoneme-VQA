@@ -24,8 +24,8 @@ get_predict_score: TRUE
 
 ##DATA
 ocr_path: "./ocr"
-max_ocr: 
-max_q_length: 180
+max_ocr: 100
+max_q_length: 30
 max_a_length: 128
 
 base_img_path: "./latr_img"
@@ -33,6 +33,8 @@ base_img_path: "./latr_img"
 qa_train_path: ""
 qa_val_path: ""
 qa_predict_path: ""
+
+NUMWORKERS: 2
 
 ## MODEL
 MODEL_CLASS: "LaTr"

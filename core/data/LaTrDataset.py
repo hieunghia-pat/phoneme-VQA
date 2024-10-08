@@ -3,8 +3,8 @@ from .base_dataset import BaseDataset
 from logger.logger import get_logger
 import torch
 import os
-import math
 import numpy as np
+import pandas as pd
 
 
 log = get_logger(__name__)
@@ -19,6 +19,7 @@ class LaTrDataset(BaseDataset):
                 max_input_length = 180,
                 max_output_length = 128,
                 truncation=True,
+                transform = None,
                 pad_token_box=[0, 0, 0, 0, 0, 0],
                 eos_token_box=[0, 0, 1000, 1000, 1000, 1000]):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
@@ -28,23 +29,19 @@ class LaTrDataset(BaseDataset):
         self.pad_token_box = pad_token_box
         self.eos_token_box = eos_token_box
 
-    def __getitem__(self, index):
-        return {
-            'input_ids': self.data[index]['input_ids'],
-            'src_attention_mask': self.data[index]['src_attention_mask'],
-            'label_ids': self.data[index]['label_ids'],
-            'label_attention_mask': self.data[index]['label_attention_mask'],
-        }
+        dataframe = pd.merge(qa_df, ocr_df[['image_id', 'bboxes', 'texts']], on='image_id', how='inner')
+
+        self.data_processing(dataframe)
 
     def __getitem__(self, index):
         
-        img_path = os.path.join(self.base_img_path, self.data['filename'][index].split(".")[0]+'.npy')
+        img_path = os.path.join(self.base_img_path, str(self.data['image_id'][index])+'.npy')
 
         img = torch.from_numpy(np.load(open(img_path,"rb"), allow_pickle=True).tolist()['image'])
 
         return {
             'input_ids': torch.tensor([self.data['input_ids'][index]], dtype=torch.int64).squeeze(0),
-            'coordinates': torch.tensor([self.data['coordinates'][index]], dtype=torch.float64).squeeze(0),
+            'coordinates': torch.tensor([self.data['coordinates'][index]], dtype=torch.int64).squeeze(0),
             'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.int64).squeeze(0),
             'label_ids': torch.tensor([self.data['label_ids'][index]], dtype=torch.int64).squeeze(0),
             'label_attention_mask': torch.tensor([self.data['label_attention_mask'][index]], dtype=torch.int64).squeeze(0),
@@ -71,14 +68,13 @@ class LaTrDataset(BaseDataset):
     
     def data_processing(self, dataframe):
         self.data['image_id'] = list(dataframe['image_id'])
-        self.data['question_id'] = list(dataframe['question_id'])
         self.data['answer'] = list(dataframe['answer'])
 
         
         for i in range(len(dataframe)):
             input_ids, tokenized_ocr, coordinates, attention_mask, ocr_attention_mask = self.create_features(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
 
-            answer_encoding = self.tokenizer("<pad>" + dataframe['answer'][i].strip(),
+            answer_encoding = self.tokenizer("<pad> " + dataframe['answer'][i].strip(),
                                                 padding='max_length',
                                                 max_length = self.max_output_length,
                                                 truncation = True)
@@ -108,51 +104,38 @@ class LaTrDataset(BaseDataset):
                      ] for i in range(len(bounding_box))
                 ]
 
-        ques_encoding = self.tokenizer(ques, add_special_tokens=False)
+        ques_encoding = self.tokenizer("<pad> " + ques.strip(),
+                                        padding='max_length',
+                                        max_length = self.max_input_length,
+                                        truncation = True)
 
-        ques_ids = ques_encoding['input_ids']
-        #ques_mask = ques_encoding['attention_mask']
-
-
+        
         ocr_encoding = self.tokenizer(ocr_texts, is_split_into_words=True,
                          add_special_tokens=False)
-
-        ocr_dist_ids = self.tokenizer(ocr_texts, is_split_into_words=False,
-                         add_special_tokens=False).input_ids
-
-        ocr_ids = ocr_encoding['input_ids']
-        #ocr_mask = ocr_encoding['attention_mask']
+        try:
+            ocr_dist_ids = self.tokenizer(ocr_texts, is_split_into_words=False,
+                            add_special_tokens=False).input_ids
+            ocr_ids = ocr_encoding['input_ids']           
+        except:
+            ocr_dist_ids = []
+            ocr_ids = []
 
         ocr_word_ids = []
 
         for i, e in enumerate(ocr_dist_ids):
             ocr_word_ids += [i]*len(e)
-
+        
+        special_tokens_count = 1
         bbox_according_to_ocr_ids = [bounding_box[i]
-                                   for i in ocr_word_ids]
+                                   for i in ocr_word_ids[:(self.max_ocr - special_tokens_count)]]
 
-        max_input_length = len(ques_ids) + len(ocr_ids) + 3
+        
+        tokenized_ocr = ocr_ids[:len(bbox_according_to_ocr_ids)] + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
-        if max_input_length > self.max_input_length:
-            input_ids = [self.tokenizer.pad_token_id] + ques_ids + [self.tokenizer.eos_token_id]
-            
-            tokenized_ocr = ocr_ids[:len(ocr_ids) - max_input_length + self.max_input_length] + [self.tokenizer.eos_token_id]
+        coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
-            coordinates = bbox_according_to_ocr_ids[:len(ocr_ids) - max_input_length + self.max_input_length] + [self.eos_token_box]
-
-            attention_mask = [1]*len(input_ids)
-
-            ocr_attention_mask = [1]*len(tokenized_ocr)
-        else:
-            input_ids = [self.tokenizer.pad_token_id] + ques_ids + [self.tokenizer.eos_token_id]
-            
-            tokenized_ocr = ocr_ids + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_input_length - max_input_length)
-
-            coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_input_length - max_input_length)
-
-            attention_mask = [1]*len(input_ids) 
-            
-            ocr_attention_mask = [1]*len(bbox_according_to_ocr_ids) + [0]*(self.max_input_length - max_input_length)
+        ocr_attention_mask = [1]*len(bbox_according_to_ocr_ids) + [0]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        
 
 
-        return input_ids, tokenized_ocr, coordinates, attention_mask, ocr_attention_mask
+        return ques_encoding['input_ids'], tokenized_ocr, coordinates, ques_encoding['attention_mask'], ocr_attention_mask

@@ -1,7 +1,5 @@
 from config.config import get_config
-from core.executor import (
-    LaTr_Executor, 
-    )
+from core.executor import *
 import sys
 import argparse
 

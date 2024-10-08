@@ -64,12 +64,8 @@ class Base_Executor():
             os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         if self.mode =='train':
-            if self.config.STEP_MODE:
-                log.info("# Training on steps... #")
-                self._train_step()
-            else:
-                log.info("# Training on epochs... #")
-                self.train()
+            log.info("# Training on epochs... #")
+            self.train()
         elif self.mode == 'eval':
             self.evaluate()
         elif self.mode == 'predict':

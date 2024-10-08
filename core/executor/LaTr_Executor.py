@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.model import LaTr
+from core.model import LaTr, LaTr_config
 from core.data import textlayout_ocr_adapt, LaTrDataset
 
 from timeit import default_timer as timer
@@ -72,8 +72,8 @@ class LaTr_Executor(Base_Executor):
                                         tokenizer = self.tokenizer,
                                         max_ocr = self.config.max_ocr,
                                         transform=None,
-                                        max_seq_length = self.config.max_q_length,
-                                        max_answer_length = self.config.max_a_length)
+                                        max_input_length = self.config.max_q_length,
+                                        max_output_length = self.config.max_a_length)
 
         self.val_data = LaTrDataset(base_img_path = self.config.base_img_path,
                                         qa_df = val_qa_df,
@@ -81,8 +81,8 @@ class LaTr_Executor(Base_Executor):
                                         tokenizer = self.tokenizer,
                                         max_ocr = self.config.max_ocr,
                                         transform=None,
-                                        max_seq_length = self.config.max_q_length,
-                                        max_answer_length = self.config.max_a_length)
+                                        max_input_length = self.config.max_q_length,
+                                        max_output_length = self.config.max_a_length)
 
     def _init_eval_predict_mode(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)
@@ -99,8 +99,8 @@ class LaTr_Executor(Base_Executor):
                                             tokenizer = self.tokenizer,
                                             max_ocr = self.config.max_ocr,
                                             transform=None,
-                                            max_seq_length = self.config.max_q_length,
-                                            max_answer_length = self.config.max_a_length)
+                                            max_input_length = self.config.max_q_length,
+                                            max_output_length = self.config.max_a_length)
             
             self.val_answer = list(val_qa_df["answer"])
             self.valiter = DataLoader(dataset = self.val_data, 
@@ -118,8 +118,8 @@ class LaTr_Executor(Base_Executor):
                                                 tokenizer = self.tokenizer,
                                                 max_ocr = self.config.max_ocr,
                                                 transform=None,
-                                                max_seq_length = self.config.max_q_length,
-                                                max_answer_length = self.config.max_a_length)
+                                                max_input_length = self.config.max_q_length,
+                                                max_output_length = self.config.max_a_length)
             
             if self.config.get_predict_score:
                 self.predict_answer = list(predict_qa_df["answer"])
@@ -135,7 +135,7 @@ class LaTr_Executor(Base_Executor):
         
         for it, batch in enumerate(self.trainiter):
             label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)
-            labels = batch['labels'].type(torch.long).to(self.config.DEVICE)
+            labels = batch['label_ids'].type(torch.long).to(self.config.DEVICE)
 
 
             trg_input = labels[:, :-1]
@@ -176,7 +176,7 @@ class LaTr_Executor(Base_Executor):
         with torch.no_grad():
             for it, batch in enumerate(self.valiter):
                 label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)
-                labels = batch['labels'].type(torch.long).to(self.config.DEVICE)
+                labels = batch['label_ids'].type(torch.long).to(self.config.DEVICE)
 
 
                 trg_input = labels[:, :-1]
