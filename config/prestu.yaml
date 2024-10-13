@@ -1,4 +1,4 @@
-EXECUTOR: "LaTr_Executor"
+EXECUTOR: "PreSTU_Executor"
 ## Training param
 DEVICE: "cuda"
 
@@ -28,7 +28,7 @@ max_ocr: 100
 max_q_length: 30
 max_a_length: 128
 
-base_img_path: "./latr_img"
+base_img_path: "./prestu_img"
 
 qa_train_path: ""
 qa_val_path: ""
@@ -37,13 +37,11 @@ qa_predict_path: ""
 NUMWORKERS: 2
 
 ## MODEL
-MODEL_CLASS: "LaTr"
+MODEL_CLASS: "PreSTU"
 
-MODEL_MOD_CONFIG_CLASS: "LaTr_config" # model modified config class
+MODEL_MOD_CONFIG_CLASS: "PreSTU_config" # model modified config class
 
 backbone_name: "VietAI/vit5-base"
 
 vit_model_name: "google/vit-base-patch16-224-in21k"
-
-max_2d_position_embeddings: 1024
 
