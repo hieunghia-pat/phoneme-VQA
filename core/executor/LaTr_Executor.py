@@ -70,7 +70,8 @@ class LaTr_Executor(Base_Executor):
                                         qa_df = train_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
-                                        max_ocr = self.config.max_ocr,
+                                        max_ocr_element = self.config.max_ocr_element,
+                                        max_ocr_length = self.config.max_ocr_length,
                                         transform=None,
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
@@ -79,7 +80,8 @@ class LaTr_Executor(Base_Executor):
                                         qa_df = val_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
-                                        max_ocr = self.config.max_ocr,
+                                        max_ocr_element = self.config.max_ocr_element,
+                                        max_ocr_length = self.config.max_ocr_length,
                                         transform=None,
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
@@ -97,7 +99,8 @@ class LaTr_Executor(Base_Executor):
                                             qa_df = val_qa_df,
                                             ocr_df = ocr_df,
                                             tokenizer = self.tokenizer,
-                                            max_ocr = self.config.max_ocr,
+                                            max_ocr_element = self.config.max_ocr_element,
+                                            max_ocr_length = self.config.max_ocr_length,
                                             transform=None,
                                             max_input_length = self.config.max_q_length,
                                             max_output_length = self.config.max_a_length)
@@ -116,7 +119,8 @@ class LaTr_Executor(Base_Executor):
                                                 qa_df = predict_qa_df,
                                                 ocr_df = ocr_df,
                                                 tokenizer = self.tokenizer,
-                                                max_ocr = self.config.max_ocr,
+                                                max_ocr_element = self.config.max_ocr_element,
+                                                max_ocr_length = self.config.max_ocr_length,
                                                 transform=None,
                                                 max_input_length = self.config.max_q_length,
                                                 max_output_length = self.config.max_a_length)

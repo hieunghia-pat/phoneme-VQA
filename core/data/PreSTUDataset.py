@@ -15,7 +15,8 @@ class PreSTUDataset(BaseDataset):
                 ocr_df,
                 tokenizer,
                 base_img_path,
-                max_ocr = 100,
+                max_ocr_element = 50, # to limit input lengths
+                max_ocr_length = 100, # to make lengths consistent
                 max_input_length = 30, # max_input_length <=> max_ques_length
                 max_output_length = 20,
                 truncation=True,
@@ -23,9 +24,10 @@ class PreSTUDataset(BaseDataset):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
 
         self.base_img_path = base_img_path
-        self.max_ocr = max_ocr
+        self.max_ocr_length = max_ocr_length
         self.transform = transform
         self.truncation = truncation
+        self.max_ocr_element = max_ocr_element
 
         dataframe = pd.merge(qa_df, ocr_df[['image_id', 'bboxes', 'texts']], on='image_id', how='inner')
 
@@ -64,7 +66,7 @@ class PreSTUDataset(BaseDataset):
 
         
         for i in range(len(dataframe)):
-            input_ids, src_attention_mask = self.create_features(dataframe['question'][i], dataframe['texts'][i])
+            input_ids, src_attention_mask = self.create_properties(dataframe['question'][i], dataframe['texts'][i])
 
             answer_encoding = self.tokenizer("<pad> " + dataframe['answer'][i].strip(),
                                                 padding='max_length',
@@ -83,6 +85,7 @@ class PreSTUDataset(BaseDataset):
 
 
     def create_features(self, ques, ocr_texts):
+        ocr_texts = ocr_texts[:self.max_ocr_element]
 
         ques_special_tokens_count = 2 
         ocr_special_tokens_count = 1
@@ -113,14 +116,14 @@ class PreSTUDataset(BaseDataset):
             ocr_word_ids += [i]*len(e)
         
         
-        tokenized_ocr_ids = ocr_ids[:(self.max_ocr - ocr_special_tokens_count)]
+        tokenized_ocr_ids = ocr_ids[:(self.max_ocr_length - ocr_special_tokens_count)]
         
         valid_length = ocr_special_tokens_count + ques_special_tokens_count + len(ques_ids) + len(tokenized_ocr_ids)
 
         input_ids = [self.tokenizer.pad_token_id] + ques_ids + [self.tokenizer.eos_token_id]\
              + tokenized_ocr_ids + [self.tokenizer.eos_token_id]\
-             + [self.tokenizer.pad_token_id]*(self.max_input_length + self.max_ocr - valid_length)
+             + [self.tokenizer.pad_token_id]*(self.max_input_length + self.max_ocr_length - valid_length)
 
-        src_attention_mask = [1]*(valid_length) + [0]*(self.max_input_length + self.max_ocr - valid_length) 
+        src_attention_mask = [1]*(valid_length) + [0]*(self.max_input_length + self.max_ocr_length - valid_length) 
 
         return input_ids, src_attention_mask

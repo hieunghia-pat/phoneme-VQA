@@ -13,21 +13,23 @@ class LaTrDataset(BaseDataset):
     def __init__(self, 
                 qa_df,
                 ocr_df,
-                base_img_path,
-                max_ocr,
                 tokenizer,
-                max_input_length = 180,
-                max_output_length = 128,
+                base_img_path,
+                max_ocr_element = 50, # to limit input lengths
+                max_ocr_length = 100, # to make lengths consistent
+                max_input_length = 30,
+                max_output_length = 20,
                 truncation=True,
                 transform = None,
                 pad_token_box=[0, 0, 0, 0, 0, 0],
-                eos_token_box=[0, 0, 1000, 1000, 1000, 1000]):
+                eos_token_box=[1000, 1000, 1000, 1000, 1000, 1000]):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
 
         self.base_img_path = base_img_path
-        self.max_ocr = max_ocr
+        self.max_ocr_length = max_ocr_length
         self.pad_token_box = pad_token_box
         self.eos_token_box = eos_token_box
+        self.max_ocr_element = max_ocr_element
 
         dataframe = pd.merge(qa_df, ocr_df[['image_id', 'bboxes', 'texts']], on='image_id', how='inner')
 
@@ -72,7 +74,7 @@ class LaTrDataset(BaseDataset):
 
         
         for i in range(len(dataframe)):
-            input_ids, tokenized_ocr, coordinates, src_attention_mask, ocr_attention_mask = self.create_features(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
+            input_ids, tokenized_ocr, coordinates, src_attention_mask, ocr_attention_mask = self.create_properties(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
 
             answer_encoding = self.tokenizer("<pad> " + dataframe['answer'][i].strip(),
                                                 padding='max_length',
@@ -93,7 +95,10 @@ class LaTrDataset(BaseDataset):
                 log.info(f"Encoding... {i+1}/{len(dataframe)}")
 
 
-    def create_features(self, ques, ocr_texts, bounding_box):
+    def create_properties(self, ques, ocr_texts, bounding_box):
+        ocr_texts = ocr_texts[:self.max_ocr_element]
+        bounding_box = bounding_box[:self.max_ocr_element]
+
         bounding_box = [
                     [bounding_box[i][0],
                      bounding_box[i][1],
@@ -127,14 +132,14 @@ class LaTrDataset(BaseDataset):
         
         special_tokens_count = 1
         bbox_according_to_ocr_ids = [bounding_box[i]
-                                   for i in ocr_word_ids[:(self.max_ocr - special_tokens_count)]]
+                                   for i in ocr_word_ids[:(self.max_ocr_length - special_tokens_count)]]
 
         
-        tokenized_ocr = ocr_ids[:len(bbox_according_to_ocr_ids)] + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        tokenized_ocr = ocr_ids[:len(bbox_according_to_ocr_ids)] + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
-        coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
-        ocr_attention_mask = [1]*(len(bbox_according_to_ocr_ids)+1) + [0]*(self.max_ocr - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        ocr_attention_mask = [1]*(len(bbox_according_to_ocr_ids)+1) + [0]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
         
 
 

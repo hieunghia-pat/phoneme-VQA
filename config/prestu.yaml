@@ -24,7 +24,8 @@ get_predict_score: TRUE
 
 ##DATA
 ocr_path: "./ocr"
-max_ocr: 100
+max_ocr_element: 50
+max_ocr_length: 100
 max_q_length: 30
 max_a_length: 128
 

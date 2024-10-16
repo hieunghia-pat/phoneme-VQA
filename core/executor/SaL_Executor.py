@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.model import PreSTU, PreSTU_config
-from core.data import textlayout_ocr_adapt, PreSTUDataset
+from core.model import SaL, SaL_config
+from core.data import textlayout_ocr_adapt, SaLDataset
 
 from timeit import default_timer as timer
 
@@ -22,7 +22,7 @@ import itertools
 log = get_logger(__name__)
 
 
-class PreSTU_Executor(Base_Executor):
+class SaL_Executor(Base_Executor):
     def __init__(self, config, mode = 'train', evaltype='last', predicttype='best'):
         super().__init__(config, mode, evaltype, predicttype)
         log.info("---Initializing Executor---")
@@ -34,13 +34,27 @@ class PreSTU_Executor(Base_Executor):
 
         with torch.no_grad():
             for it, batch in enumerate(dataloader):
-                pixel_values = batch['pixel_values'].to(self.config.DEVICE)
                 input_ids = batch['input_ids'].to(self.config.DEVICE)
                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE)
+                ocr_attention_mask = batch['ocr_attention_mask'].to(self.config.DEVICE)
+                tokenized_ocr = batch['tokenized_ocr'].to(self.config.DEVICE)
+                ocr_coordinates = batch['ocr_coordinates'].to(self.config.DEVICE)
+                ocr_features = batch['ocr_features'].to(self.config.DEVICE)
+                tokenized_obj = batch['tokenized_obj'].to(self.config.DEVICE)
+                obj_attention_mask = batch['obj_attention_mask'].to(self.config.DEVICE)
+                obj_coordinates = batch['obj_coordinates'].to(self.config.DEVICE)
+                obj_features = batch['obj_features'].to(self.config.DEVICE)
 
-                pred = self.model.generate( pixel_values,
-                                            input_ids,
+                pred = self.model.generate( input_ids,
                                             src_attention_mask,
+                                            tokenized_ocr,
+                                            ocr_attention_mask,
+                                            ocr_coordinates,
+                                            ocr_features,
+                                            tokenized_obj,
+                                            obj_attention_mask,
+                                            obj_coordinates,
+                                            obj_features,
                                             max_length = max_length)
 
                 decoded_preds += self.tokenizer.batch_decode(self._infer_post_processing(pred.tolist()), skip_special_tokens=True)
@@ -56,26 +70,33 @@ class PreSTU_Executor(Base_Executor):
         val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         self.val_answer = list(val_qa_df["answer"])
 
-        ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
+        ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
 
         print("# Creating Datasets")
         
-        self.train_data = PreSTUDataset(base_img_path = self.config.base_img_path,
-                                        qa_df = train_qa_df,
+        self.train_data = SaLDataset(   qa_df = train_qa_df,
                                         ocr_df = ocr_df,
-                                        tokenizer = self.tokenizer,
+                                        base_ocr_feature_path = self.config.base_ocr_feature_path,
+                                        base_obj_feature_path = self.config.base_obj_feature_path,
                                         max_ocr_element = self.config.max_ocr_element,
                                         max_ocr_length = self.config.max_ocr_length,
+                                        max_obj_element = self.config.max_obj_element,
+                                        max_obj_length = self.config.max_obj_length,
+                                        tokenizer = self.tokenizer,
+                                        max_ocr = self.config.max_ocr,
                                         transform=None,
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
 
-        self.val_data = PreSTUDataset(base_img_path = self.config.base_img_path,
-                                        qa_df = val_qa_df,
+        self.val_data = SaLDataset(     qa_df = val_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
+                                        base_ocr_feature_path = self.config.base_ocr_feature_path,
+                                        base_obj_feature_path = self.config.base_obj_feature_path,
                                         max_ocr_element = self.config.max_ocr_element,
                                         max_ocr_length = self.config.max_ocr_length,
+                                        max_obj_element = self.config.max_obj_element,
+                                        max_obj_length = self.config.max_obj_length,
                                         transform=None,
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
@@ -87,14 +108,17 @@ class PreSTU_Executor(Base_Executor):
             print("###Load eval data ...")
             val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         
-            ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
+            ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
 
-            self.val_data = PreSTUDataset(base_img_path = self.config.base_img_path,
-                                            qa_df = val_qa_df,
+            self.val_data = SaLDataset(     qa_df = val_qa_df,
                                             ocr_df = ocr_df,
                                             tokenizer = self.tokenizer,
+                                            base_ocr_feature_path = self.config.base_ocr_feature_path,
+                                            base_obj_feature_path = self.config.base_obj_feature_path,
                                             max_ocr_element = self.config.max_ocr_element,
-                                        max_ocr_length = self.config.max_ocr_length,
+                                            max_ocr_length = self.config.max_ocr_length,
+                                            max_obj_element = self.config.max_obj_element,
+                                            max_obj_length = self.config.max_obj_length,
                                             transform=None,
                                             max_input_length = self.config.max_q_length,
                                             max_output_length = self.config.max_a_length)
@@ -107,14 +131,17 @@ class PreSTU_Executor(Base_Executor):
             print("###Load predict data ...")
             predict_qa_df = pd.read_csv(self.config.qa_predict_path)[["image_id", "question", "answer", "filename"]]
         
-            ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
+            ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
 
-            self.predict_data = PreSTUDataset(base_img_path = self.config.base_img_path,
-                                                qa_df = predict_qa_df,
+            self.predict_data = SaLDataset(     qa_df = predict_qa_df,
                                                 ocr_df = ocr_df,
                                                 tokenizer = self.tokenizer,
+                                                base_ocr_feature_path = self.config.base_ocr_feature_path,
+                                                base_obj_feature_path = self.config.base_obj_feature_path,
                                                 max_ocr_element = self.config.max_ocr_element,
-                                        max_ocr_length = self.config.max_ocr_length,
+                                                max_ocr_length = self.config.max_ocr_length,
+                                                max_obj_element = self.config.max_obj_element,
+                                                max_obj_length = self.config.max_obj_length,
                                                 transform=None,
                                                 max_input_length = self.config.max_q_length,
                                                 max_output_length = self.config.max_a_length)
@@ -139,11 +166,19 @@ class PreSTU_Executor(Base_Executor):
             trg_input = labels[:, :-1]
             label_attention_mask = label_attention_mask[:, :-1]
 
-            logits = self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                input_ids = batch['input_ids'].to(self.config.DEVICE),
+            logits = self.model(input_ids = batch['input_ids'].to(self.config.DEVICE),
                                 labels = trg_input,
                                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                label_attention_mask = label_attention_mask,)
+                                label_attention_mask = label_attention_mask,
+                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),
+                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
+                                ocr_coordinates=batch['ocr_coordinates'].to(self.config.DEVICE),
+                                ocr_features=batch['ocr_features'].to(self.config.DEVICE),
+                                tokenized_obj=batch['tokenized_obj'].to(self.config.DEVICE),
+                                obj_attention_mask=batch['obj_attention_mask'].to(self.config.DEVICE),
+                                obj_coordinates=batch['obj_coordinates'].to(self.config.DEVICE),
+                                obj_features=batch['obj_features'].to(self.config.DEVICE),
+                                )
 
 
             self.optim.zero_grad()
@@ -173,15 +208,21 @@ class PreSTU_Executor(Base_Executor):
                 label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)
                 labels = batch['label_ids'].type(torch.long).to(self.config.DEVICE)
 
-
                 trg_input = labels[:, :-1]
                 label_attention_mask = label_attention_mask[:, :-1]
 
-                logits = self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                    input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                    labels = trg_input,
-                                    src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                    label_attention_mask = label_attention_mask,)
+                logits = self.model(input_ids = batch['input_ids'].to(self.config.DEVICE),
+                                labels = trg_input,
+                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
+                                label_attention_mask = label_attention_mask,
+                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),
+                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
+                                ocr_coordinates=batch['ocr_coordinates'].to(self.config.DEVICE),
+                                ocr_features=batch['ocr_features'].to(self.config.DEVICE),
+                                tokenized_obj=batch['tokenized_obj'].to(self.config.DEVICE),
+                                obj_attention_mask=batch['obj_attention_mask'].to(self.config.DEVICE),
+                                obj_coordinates=batch['obj_coordinates'].to(self.config.DEVICE),
+                                obj_features=batch['obj_features'].to(self.config.DEVICE),)
 
 
                 trg_out = labels[:, 1:]
