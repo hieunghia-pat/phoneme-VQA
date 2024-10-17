@@ -16,6 +16,8 @@ class SaLDataset(BaseDataset):
                 tokenizer,
                 base_ocr_feature_path,
                 base_obj_feature_path,
+                ocr_hidden,
+                obj_hidden,
                 max_ocr_element = 50, # to limit input lengths
                 max_ocr_length = 150, # to make lengths consistent (inluding context tokens)
                 max_obj_element = 25, # to limit input lengths
@@ -29,13 +31,13 @@ class SaLDataset(BaseDataset):
                 eos_token_box=[1000, 1000, 1000, 1000]):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
 
-        self.tokenizer.add_tokens([context_token])
-
         self.base_ocr_feature_path = base_ocr_feature_path
         self.base_obj_feature_path = base_obj_feature_path
 
+        self.ocr_hidden = ocr_hidden
         self.max_ocr_length = max_ocr_length
         self.max_ocr_element = max_ocr_element
+        self.obj_hidden = obj_hidden
         self.max_obj_element = max_obj_element
         self.max_obj_length = max_obj_length
 
@@ -52,7 +54,24 @@ class SaLDataset(BaseDataset):
         
         obj_path = os.path.join(self.base_obj_path, str(self.data['image_id'][index])+'.npy')
 
-        obj_feature = torch.from_numpy(np.load(open(obj_path,"rb"), allow_pickle=True).tolist()['region_boxes'])
+        obj_f = np.load(open(obj_path,"rb"), allow_pickle=True).tolist()['region_features']
+
+        ocr_path = os.path.join(self.base_ocr_path, str(self.data['image_id'][index])+'.npy')
+
+        ocr_f = np.load(open(ocr_path,"rb"), allow_pickle=True).tolist()['ocr_features']
+
+
+        obj_features_according_to_obj_ids = [obj_f[i]
+                                   for i in self.obj_word_ids[index][:(self.max_obj_length - 1)]]
+        
+        obj_features = torch.stack(obj_features_according_to_obj_ids\
+             + [torch.zeros(self.obj_hidden)]*(self.max_obj_length - len(obj_features_according_to_obj_ids)))
+
+        ocr_features_according_to_ocr_ids = [ocr_f[i]
+                                   for i in self.ocr_word_ids[index][:(self.max_ocr_length - 1)]]
+        
+        ocr_features = torch.stack(ocr_features_according_to_ocr_ids\
+             + [torch.zeros(self.ocr_hidden)]*(self.max_ocr_length - len(ocr_features_according_to_ocr_ids)))
 
 
 
@@ -67,8 +86,8 @@ class SaLDataset(BaseDataset):
             'obj_attention_mask': torch.tensor([self.data['obj_attention_mask'][index]], dtype=torch.int64).squeeze(0),
             'obj_coordinates': torch.tensor([self.data['obj_coordinates'][index]], dtype=torch.int64).squeeze(0),
             'tokenized_obj': torch.tensor([self.data['tokenized_obj'][index]], dtype=torch.int64).squeeze(0),
-            'ocr_features': 0,
-            'obj_features': 0,
+            'ocr_features': ocr_features,
+            'obj_features': obj_features,
         }
 
     @override
@@ -85,6 +104,8 @@ class SaLDataset(BaseDataset):
                         'ocr_features',
                         'obj_features',
                         'tokenized_obj',
+                        'ocr_word_ids',
+                        'obj_word_ids'
                         ]
         self.data = dict()
         for key in self.feature:
@@ -97,9 +118,9 @@ class SaLDataset(BaseDataset):
 
         
         for i in range(len(dataframe)):
-            tokenized_ocr, ocr_coordinates, ocr_attention_mask = self.create_ocr_properties(dataframe['texts'][i], dataframe['bboxes'][i])
+            tokenized_ocr, ocr_coordinates, ocr_attention_mask, ocr_word_ids = self.create_ocr_properties(dataframe['texts'][i], dataframe['bboxes'][i])
 
-            tokenized_obj, obj_coordinates, obj_attention_mask = self.create_obj_properties(dataframe['object_list'][i], dataframe['region_boxes'][i])
+            tokenized_obj, obj_coordinates, obj_attention_mask, obj_word_ids = self.create_obj_properties(dataframe['object_list'][i], dataframe['region_boxes'][i])
 
             ques_encoding = self.tokenizer("<pad> " + dataframe['question'][i].strip(),
                                         padding='max_length',
@@ -119,10 +140,12 @@ class SaLDataset(BaseDataset):
             self.data['tokenized_ocr'].append(tokenized_ocr)
             self.data['ocr_coordinates'].append(ocr_coordinates)
             self.data['ocr_attention_mask'].append(ocr_attention_mask)
+            self.data['ocr_word_ids'].append(ocr_word_ids)
 
             self.data['tokenized_obj'].append(tokenized_obj)
             self.data['obj_coordinates'].append(obj_coordinates)
             self.data['obj_attention_mask'].append(obj_attention_mask)
+            self.data['obj_word_ids'].append(obj_word_ids)
 
 
             if i + 1 == 1 or (i + 1) % 1000 == 0 or i+1 == len(dataframe):
@@ -163,7 +186,7 @@ class SaLDataset(BaseDataset):
 
         ocr_attention_mask = [1]*(len(bbox_according_to_ocr_ids)+1) + [0]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
         
-        return tokenized_ocr, coordinates, ocr_attention_mask
+        return tokenized_ocr, coordinates, ocr_attention_mask, ocr_word_ids
 
     
     def create_obj_properties(self, obj_labels, bounding_box):
@@ -199,4 +222,4 @@ class SaLDataset(BaseDataset):
 
         obj_attention_mask = [1]*(len(bbox_according_to_obj_ids)+1) + [0]*(self.max_obj_length - len(bbox_according_to_obj_ids) - special_tokens_count)
         
-        return tokenized_obj, coordinates, obj_attention_mask
+        return tokenized_obj, coordinates, obj_attention_mask, obj_word_ids

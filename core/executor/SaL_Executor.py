@@ -55,6 +55,8 @@ class SaL_Executor(Base_Executor):
                                             obj_attention_mask,
                                             obj_coordinates,
                                             obj_features,
+                                            max_ocr=self.config.max_ocr_length,
+                                            max_ques=self.config.max_q_length,
                                             max_length = max_length)
 
                 decoded_preds += self.tokenizer.batch_decode(self._infer_post_processing(pred.tolist()), skip_special_tokens=True)
@@ -65,6 +67,7 @@ class SaL_Executor(Base_Executor):
     
     def _create_data_utils(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)
+        self.tokenizer.add_tokens([self.config.context_token])
 
         train_qa_df = pd.read_csv(self.config.qa_train_path)[["image_id", "question", "answer", "filename"]]
         val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
@@ -78,12 +81,13 @@ class SaL_Executor(Base_Executor):
                                         ocr_df = ocr_df,
                                         base_ocr_feature_path = self.config.base_ocr_feature_path,
                                         base_obj_feature_path = self.config.base_obj_feature_path,
+                                        ocr_hidden = self.config.ocr_hidden,
+                                        obj_hidden = self.config.obj_hidden,
                                         max_ocr_element = self.config.max_ocr_element,
                                         max_ocr_length = self.config.max_ocr_length,
                                         max_obj_element = self.config.max_obj_element,
                                         max_obj_length = self.config.max_obj_length,
                                         tokenizer = self.tokenizer,
-                                        max_ocr = self.config.max_ocr,
                                         transform=None,
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
@@ -93,6 +97,8 @@ class SaL_Executor(Base_Executor):
                                         tokenizer = self.tokenizer,
                                         base_ocr_feature_path = self.config.base_ocr_feature_path,
                                         base_obj_feature_path = self.config.base_obj_feature_path,
+                                        ocr_hidden = self.config.ocr_hidden,
+                                        obj_hidden = self.config.obj_hidden,
                                         max_ocr_element = self.config.max_ocr_element,
                                         max_ocr_length = self.config.max_ocr_length,
                                         max_obj_element = self.config.max_obj_element,
@@ -103,6 +109,7 @@ class SaL_Executor(Base_Executor):
 
     def _init_eval_predict_mode(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)
+        self.tokenizer.add_tokens([self.config.context_token])
 
         if self.mode == "eval":
             print("###Load eval data ...")
@@ -115,6 +122,8 @@ class SaL_Executor(Base_Executor):
                                             tokenizer = self.tokenizer,
                                             base_ocr_feature_path = self.config.base_ocr_feature_path,
                                             base_obj_feature_path = self.config.base_obj_feature_path,
+                                            ocr_hidden = self.config.ocr_hidden,
+                                            obj_hidden = self.config.obj_hidden,
                                             max_ocr_element = self.config.max_ocr_element,
                                             max_ocr_length = self.config.max_ocr_length,
                                             max_obj_element = self.config.max_obj_element,
@@ -138,6 +147,8 @@ class SaL_Executor(Base_Executor):
                                                 tokenizer = self.tokenizer,
                                                 base_ocr_feature_path = self.config.base_ocr_feature_path,
                                                 base_obj_feature_path = self.config.base_obj_feature_path,
+                                                ocr_hidden = self.config.ocr_hidden,
+                                                obj_hidden = self.config.obj_hidden,
                                                 max_ocr_element = self.config.max_ocr_element,
                                                 max_ocr_length = self.config.max_ocr_length,
                                                 max_obj_element = self.config.max_obj_element,
@@ -178,6 +189,8 @@ class SaL_Executor(Base_Executor):
                                 obj_attention_mask=batch['obj_attention_mask'].to(self.config.DEVICE),
                                 obj_coordinates=batch['obj_coordinates'].to(self.config.DEVICE),
                                 obj_features=batch['obj_features'].to(self.config.DEVICE),
+                                max_ocr=self.config.max_ocr_length,
+                                max_ques=self.config.max_q_length,
                                 )
 
 
@@ -212,17 +225,19 @@ class SaL_Executor(Base_Executor):
                 label_attention_mask = label_attention_mask[:, :-1]
 
                 logits = self.model(input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                labels = trg_input,
-                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                label_attention_mask = label_attention_mask,
-                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),
-                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
-                                ocr_coordinates=batch['ocr_coordinates'].to(self.config.DEVICE),
-                                ocr_features=batch['ocr_features'].to(self.config.DEVICE),
-                                tokenized_obj=batch['tokenized_obj'].to(self.config.DEVICE),
-                                obj_attention_mask=batch['obj_attention_mask'].to(self.config.DEVICE),
-                                obj_coordinates=batch['obj_coordinates'].to(self.config.DEVICE),
-                                obj_features=batch['obj_features'].to(self.config.DEVICE),)
+                                    labels = trg_input,
+                                    src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
+                                    label_attention_mask = label_attention_mask,
+                                    tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),
+                                    ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
+                                    ocr_coordinates=batch['ocr_coordinates'].to(self.config.DEVICE),
+                                    ocr_features=batch['ocr_features'].to(self.config.DEVICE),
+                                    tokenized_obj=batch['tokenized_obj'].to(self.config.DEVICE),
+                                    obj_attention_mask=batch['obj_attention_mask'].to(self.config.DEVICE),
+                                    obj_coordinates=batch['obj_coordinates'].to(self.config.DEVICE),
+                                    obj_features=batch['obj_features'].to(self.config.DEVICE),
+                                    max_ocr=self.config.max_ocr_length,
+                                    max_ques=self.config.max_q_length,)
 
 
                 trg_out = labels[:, 1:]
