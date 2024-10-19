@@ -98,7 +98,7 @@ class SaL(nn.Module):
 
 
     def generate(self,
-                 input_ids,
+                input_ids,
                 src_attention_mask,
                 tokenized_ocr,
                 ocr_attention_mask,

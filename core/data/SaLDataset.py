@@ -66,7 +66,7 @@ class SaLDataset(BaseDataset):
         obj_features = torch.stack(obj_features_according_to_obj_ids\
              + [torch.zeros(self.obj_hidden)]*(self.max_obj_length - len(obj_features_according_to_obj_ids)))
 
-        ocr_features_according_to_ocr_ids = [torch.from_numpy(np.concatenate([ocr_f['det_features'][i] , ocr_f['rec_features'][i]], axis=-1))
+        ocr_features_according_to_ocr_ids = [torch.from_numpy(np.concatenate([ocr_f['det_features'][i], ocr_f['rec_features'][i]], axis=-1))
                                    for i in self.data['ocr_word_ids'][index][:(self.max_ocr_length - 1)]]
         ocr_features = torch.stack(ocr_features_according_to_ocr_ids\
              + [torch.zeros(self.ocr_hidden)]*(self.max_ocr_length - len(ocr_features_according_to_ocr_ids)))
@@ -178,7 +178,7 @@ class SaLDataset(BaseDataset):
                                    for i in ocr_word_ids[:(self.max_ocr_length - special_tokens_count)]]
         
         
-        tokenized_ocr = ocr_ids[:len(bbox_according_to_ocr_ids)] + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
+        tokenized_ocr = TSS_ocr_ids[:len(bbox_according_to_ocr_ids)] + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
 
         coordinates = bbox_according_to_ocr_ids + [self.eos_token_box] + [self.pad_token_box]*(self.max_ocr_length - len(bbox_according_to_ocr_ids) - special_tokens_count)
 

@@ -185,7 +185,7 @@ class SaL_Executor(Base_Executor):
             label_attention_mask = label_attention_mask[:, :-1]
 
             logits = self.model(input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                labels = trg_input,
+                                label_ids = trg_input,
                                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
                                 label_attention_mask = label_attention_mask,
                                 tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),
@@ -232,7 +232,7 @@ class SaL_Executor(Base_Executor):
                 label_attention_mask = label_attention_mask[:, :-1]
 
                 logits = self.model(input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                    labels = trg_input,
+                                    label_ids = trg_input,
                                     src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
                                     label_attention_mask = label_attention_mask,
                                     tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE),

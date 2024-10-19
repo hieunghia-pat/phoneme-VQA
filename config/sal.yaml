@@ -37,6 +37,8 @@ qa_train_path: ""
 qa_val_path: ""
 qa_predict_path: ""
 
+context_token: "<c>"
+
 NUMWORKERS: 2
 
 ## MODEL
@@ -46,5 +48,5 @@ MODEL_MOD_CONFIG_CLASS: "SaL_config" # model modified config class
 
 backbone_name: "VietAI/vit5-base"
 
-ocr_hidden: 51
-obj_hideen: 2048
+ocr_hidden: 512
+obj_hidden: 2048
