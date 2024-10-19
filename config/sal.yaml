@@ -23,7 +23,6 @@ max_eval_length: 20
 get_predict_score: TRUE
 
 ##DATA
-ocr_path: "./ocr"
 max_ocr_element: 50
 max_ocr_length: 100
 max_obj_element: 25

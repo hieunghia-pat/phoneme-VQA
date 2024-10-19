@@ -73,7 +73,7 @@ class SaL_Executor(Base_Executor):
         val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         self.val_answer = list(val_qa_df["answer"])
 
-        ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+        ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)
         obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
         print("# Creating Datasets")
@@ -118,7 +118,7 @@ class SaL_Executor(Base_Executor):
             print("###Load eval data ...")
             val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         
-            ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+            ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)
             obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
             self.val_data = SaLDataset(     qa_df = val_qa_df,
@@ -145,7 +145,7 @@ class SaL_Executor(Base_Executor):
             print("###Load predict data ...")
             predict_qa_df = pd.read_csv(self.config.qa_predict_path)[["image_id", "question", "answer", "filename"]]
         
-            ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+            ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)
             obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
             self.predict_data = SaLDataset(     qa_df = predict_qa_df,
