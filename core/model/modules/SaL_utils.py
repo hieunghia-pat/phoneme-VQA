@@ -119,25 +119,6 @@ class RelativePositionBiasBase(nn.Module, ABC):
 
         return values
     
-    def compute_geo_bias(self, ocr_circle_dist, device=None):
-        """Compute binned relative position bias"""
-        if device is None:
-            device = self.relative_attention_bias.weight.device
-     
-        relative_position = ocr_circle_dist  # shape (query_length, key_length)
-        relative_position_bucket = self._relative_position_bucket(
-            relative_position,  # shape (query_length, key_length)
-            bidirectional=True,
-            num_buckets=32,
-            max_distance=self.relative_attention_max_distance,
-        )
-        # if self.count==1:
-        #         self.relative_attention_geo_bias.weight.data=self.relative_attention_bias.weight.clone().detach()
-        #         self.count-=1
-        values = self.relative_attention_geo_bias(relative_position_bucket)  # shape (query_length, key_length, num_heads)
-        values = values.permute([0,3, 1, 2])  # shape (1, num_heads, query_length, key_length)
-        return values
-
 
 class RelativePositionBias1D(RelativePositionBiasBase):
     def __init__(self, scaling_factor=1, max_distance=128, **kwargs):
@@ -177,12 +158,11 @@ class SCPRelativePositionBias(RelativePositionBiasBase):
         # get x positions of left point of bbox
         assert coordinates is not None
 
-        x_ocr_c, y_ocr_c = (coordinates[:,0] + coordinates[:,2])/2,\
-            (coordinates[:,1] + coordinates[:,3])/2
+        x_ocr_c, y_ocr_c = coordinates[:, :, [0, 2]].mean(dim=-1), coordinates[:, :, [1, 3]].mean(dim=-1)
        
-        ocr_c_x_index = np.int32(np.floor(x_ocr_c*x_size))
-        ocr_c_y_index = np.int32(np.floor(y_ocr_c*x_size))
-        ocr_circle_dist = self.dists_align_all[ocr_c_x_index,ocr_c_y_index][:,ocr_c_x_index,ocr_c_y_index]
+        ocr_c_x_index = np.int32(np.floor(x_ocr_c.cpu().detach().numpy()*x_size))
+        ocr_c_y_index = np.int32(np.floor(y_ocr_c.cpu().detach().numpy()*x_size))
+        ocr_circle_dist = self.dists_align_all[ocr_c_x_index,ocr_c_y_index][:, :, ocr_c_x_index,ocr_c_y_index][:,:,0,:]
         ocr_circle_dist = torch.tensor(ocr_circle_dist).to(torch.long)
 
         return ocr_circle_dist
@@ -211,9 +191,8 @@ class SCPRelativePositionBias(RelativePositionBiasBase):
                 dists_align_all = np.concatenate((dists_align_all,dists_align_y),axis=0)
               
         self.dists_align_all = dists_align_all*5
-
-
-
+    
+    
 class RelativePositionBiasAggregated(nn.Module):
     def __init__(self, Relative1D: RelativePositionBiasBase, SCP: RelativePositionBiasBase):
         """
@@ -235,7 +214,9 @@ class RelativePositionBiasAggregated(nn.Module):
         rel = self.Relative1D(input_ids, attention_mask, coordinates)
         scp = self.SCP(input_ids, attention_mask, coordinates)
 
-        rel[:,:,max_ques:max_ocr,max_ques:max_ocr] += scp
+        rel = torch.cat([rel for _ in range(input_ids.size(0))], dim=0)
+
+        rel[:,:,max_ques:max_ques+max_ocr,max_ques:max_ques+max_ocr] += scp
         
         return rel
 

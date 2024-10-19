@@ -29,7 +29,7 @@ class SaLDataset(BaseDataset):
                 transform = None,
                 context_token = "<c>",
                 pad_token_box=[0, 0, 0, 0],
-                eos_token_box=[1000, 1000, 1000, 1000]):
+                eos_token_box=[0.9999, 0.9999, 0.9999, 0.9999]):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
 
         self.base_ocr_feature_path = base_ocr_feature_path
@@ -80,9 +80,9 @@ class SaLDataset(BaseDataset):
             'label_attention_mask': torch.tensor([self.data['label_attention_mask'][index]], dtype=torch.int64).squeeze(0),
             'tokenized_ocr': torch.tensor([self.data['tokenized_ocr'][index]], dtype=torch.int64).squeeze(0),
             'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.int64).squeeze(0),
-            'ocr_coordinates': torch.tensor([self.data['ocr_coordinates'][index]], dtype=torch.int64).squeeze(0),
+            'ocr_coordinates': torch.tensor([self.data['ocr_coordinates'][index]], dtype=torch.float).squeeze(0),
             'obj_attention_mask': torch.tensor([self.data['obj_attention_mask'][index]], dtype=torch.int64).squeeze(0),
-            'obj_coordinates': torch.tensor([self.data['obj_coordinates'][index]], dtype=torch.int64).squeeze(0),
+            'obj_coordinates': torch.tensor([self.data['obj_coordinates'][index]], dtype=torch.float).squeeze(0),
             'tokenized_obj': torch.tensor([self.data['tokenized_obj'][index]], dtype=torch.int64).squeeze(0),
             'ocr_features': ocr_features,
             'obj_features': obj_features,

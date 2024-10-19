@@ -5,6 +5,7 @@ import torch
 import math
 import pandas as pd
 from torch.utils.data import DataLoader
+from typing_extensions import override
 
 from logger.logger import get_logger
 from .base_executor import Base_Executor
@@ -64,6 +65,18 @@ class SaL_Executor(Base_Executor):
                 log.info(f"|===| Inferring... {it+1} it |===|")
 
         return decoded_preds
+
+    @override
+    def _build_model(self):
+        log.info(f"# Building model architecture ...")
+        if self.config.MODEL_MOD_CONFIG_CLASS is not None:   
+            self.model_config = self.build_class(self.config.MODEL_MOD_CONFIG_CLASS)().build(self.config, len(self.tokenizer))
+        else:
+            self.model_config = AutoConfig.from_pretrained(self.config.backbone_name)
+
+        self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config)
+        self.model = self.model.to(self.config.DEVICE)
+    
     
     def _create_data_utils(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)

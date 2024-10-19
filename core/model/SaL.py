@@ -11,11 +11,12 @@ from .modules import (
 )
 
 class SaL_config:
-    def build(self, config):
+    def build(self, config, new_token_embedding_size):
         model_config = AutoConfig.from_pretrained(config.backbone_name)
 
         model_config.update({"ocr_hidden" : config.ocr_hidden,
-                                "obj_hidden" : config.obj_hidden})
+                                "obj_hidden" : config.obj_hidden,
+                                "new_token_embedding_size": new_token_embedding_size})
         
         return model_config
 
@@ -26,6 +27,7 @@ class SaL(nn.Module):
 
         self.config = config
         self.backbone = T52dForConditionalGeneration.from_pretrained(self.config._name_or_path)
+        self.backbone.resize_token_embeddings(self.config.new_token_embedding_size)
         self.rel2Dbias = RelativePositionBiasAggregated(Relative1D=RelativePositionBias1D(num_heads = self.backbone.config.num_heads),
                                                         SCP=SCPRelativePositionBias(num_heads = self.backbone.config.num_heads))
 
@@ -64,16 +66,16 @@ class SaL(nn.Module):
         
         ques_inputs_embeds = self.backbone.shared(input_ids)
 
-        multi_modal_feat = torch.cat([ques_inputs_embeds, ocr_inputs_embeds, obj_inputs_embeds], axis=1)
+        multi_modal_feat = torch.cat([ques_inputs_embeds, ocr_inputs_embeds, obj_inputs_embeds], dim=1)
 
         input_attention_mask = torch.cat(
-            [src_attention_mask, ocr_attention_mask, obj_attention_mask], axis=1)
+            [src_attention_mask, ocr_attention_mask, obj_attention_mask], dim=1)
         
-        position_bias = self.rel2Dbias(input_ids, src_attention_mask, ocr_coordinates, max_ques, max_ocr)
+        position_bias = self.rel2Dbias(multi_modal_feat, input_attention_mask, ocr_coordinates, max_ques, max_ocr)
 
         encoder_outputs = self.backbone.encoder(
-                attention_mask=multi_modal_feat,
-                inputs_embeds=input_attention_mask,
+                attention_mask=input_attention_mask,
+                inputs_embeds=multi_modal_feat,
                 position_bias=position_bias
             ).last_hidden_state
 
@@ -120,9 +122,11 @@ class SaL(nn.Module):
         
         ques_inputs_embeds = self.backbone.shared(input_ids)
 
-        multi_modal_feat = torch.cat([ques_inputs_embeds, ocr_inputs_embeds, obj_inputs_embeds], axis=1)
+        multi_modal_feat = torch.cat([ques_inputs_embeds, ocr_inputs_embeds, obj_inputs_embeds], dim=1)
+        input_attention_mask = torch.cat(
+            [src_attention_mask, ocr_attention_mask, obj_attention_mask], dim=1)
 
-        position_bias = self.rel2Dbias(input_ids, src_attention_mask, ocr_coordinates, max_ques, max_ocr)
+        position_bias = self.rel2Dbias(multi_modal_feat, input_attention_mask, ocr_coordinates, max_ques, max_ocr)
 
         return self.backbone.generate(inputs_embeds = multi_modal_feat,
                                         position_bias = position_bias, 
