@@ -13,6 +13,7 @@ class SaLDataset(BaseDataset):
     def __init__(self, 
                 qa_df,
                 ocr_df,
+                obj_df,
                 tokenizer,
                 base_ocr_feature_path,
                 base_obj_feature_path,
@@ -47,29 +48,26 @@ class SaLDataset(BaseDataset):
         self.context_token_id = self.tokenizer(self.context_token).input_ids[0]
 
         dataframe = pd.merge(qa_df, ocr_df[['image_id', 'bboxes', 'texts']], on='image_id', how='inner')
+        dataframe = pd.merge(dataframe, obj_df[['image_id', 'obj_bboxes', 'obj_labels']], on='image_id', how='inner')
 
         self.data_processing(dataframe)
 
     def __getitem__(self, index):
         
-        obj_path = os.path.join(self.base_obj_path, str(self.data['image_id'][index])+'.npy')
-
+        obj_path = os.path.join(self.base_obj_feature_path, str(self.data['image_id'][index])+'.npy')
         obj_f = np.load(open(obj_path,"rb"), allow_pickle=True).tolist()['region_features']
-
-        ocr_path = os.path.join(self.base_ocr_path, str(self.data['image_id'][index])+'.npy')
-
-        ocr_f = np.load(open(ocr_path,"rb"), allow_pickle=True).tolist()['ocr_features']
+        
+        ocr_path = os.path.join(self.base_ocr_feature_path, str(self.data['image_id'][index])+'.npy')
+        ocr_f = np.load(open(ocr_path,"rb"), allow_pickle=True).tolist()
 
 
         obj_features_according_to_obj_ids = [obj_f[i]
-                                   for i in self.obj_word_ids[index][:(self.max_obj_length - 1)]]
-        
+                                   for i in self.data['obj_word_ids'][index][:(self.max_obj_length - 1)]]
         obj_features = torch.stack(obj_features_according_to_obj_ids\
              + [torch.zeros(self.obj_hidden)]*(self.max_obj_length - len(obj_features_according_to_obj_ids)))
 
-        ocr_features_according_to_ocr_ids = [ocr_f[i]
-                                   for i in self.ocr_word_ids[index][:(self.max_ocr_length - 1)]]
-        
+        ocr_features_according_to_ocr_ids = [torch.from_numpy(np.concatenate([ocr_f['det_features'][i] , ocr_f['rec_features'][i]], axis=-1))
+                                   for i in self.data['ocr_word_ids'][index][:(self.max_ocr_length - 1)]]
         ocr_features = torch.stack(ocr_features_according_to_ocr_ids\
              + [torch.zeros(self.ocr_hidden)]*(self.max_ocr_length - len(ocr_features_according_to_ocr_ids)))
 
@@ -120,7 +118,7 @@ class SaLDataset(BaseDataset):
         for i in range(len(dataframe)):
             tokenized_ocr, ocr_coordinates, ocr_attention_mask, ocr_word_ids = self.create_ocr_properties(dataframe['texts'][i], dataframe['bboxes'][i])
 
-            tokenized_obj, obj_coordinates, obj_attention_mask, obj_word_ids = self.create_obj_properties(dataframe['object_list'][i], dataframe['region_boxes'][i])
+            tokenized_obj, obj_coordinates, obj_attention_mask, obj_word_ids = self.create_obj_properties(dataframe['obj_labels'][i], dataframe['obj_bboxes'][i])
 
             ques_encoding = self.tokenizer("<pad> " + dataframe['question'][i].strip(),
                                         padding='max_length',

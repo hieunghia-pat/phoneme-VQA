@@ -10,7 +10,7 @@ from logger.logger import get_logger
 from .base_executor import Base_Executor
 
 from core.model import SaL, SaL_config
-from core.data import textlayout_ocr_adapt, SaLDataset
+from core.data import textlayout_ocr_adapt, textlayout_obj_adapt, SaLDataset
 
 from timeit import default_timer as timer
 
@@ -74,11 +74,13 @@ class SaL_Executor(Base_Executor):
         self.val_answer = list(val_qa_df["answer"])
 
         ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+        obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
         print("# Creating Datasets")
         
         self.train_data = SaLDataset(   qa_df = train_qa_df,
                                         ocr_df = ocr_df,
+                                        obj_df = obj_df,
                                         base_ocr_feature_path = self.config.base_ocr_feature_path,
                                         base_obj_feature_path = self.config.base_obj_feature_path,
                                         ocr_hidden = self.config.ocr_hidden,
@@ -94,6 +96,7 @@ class SaL_Executor(Base_Executor):
 
         self.val_data = SaLDataset(     qa_df = val_qa_df,
                                         ocr_df = ocr_df,
+                                        obj_df = obj_df,
                                         tokenizer = self.tokenizer,
                                         base_ocr_feature_path = self.config.base_ocr_feature_path,
                                         base_obj_feature_path = self.config.base_obj_feature_path,
@@ -116,9 +119,11 @@ class SaL_Executor(Base_Executor):
             val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+            obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
             self.val_data = SaLDataset(     qa_df = val_qa_df,
                                             ocr_df = ocr_df,
+                                            obj_df = obj_df,
                                             tokenizer = self.tokenizer,
                                             base_ocr_feature_path = self.config.base_ocr_feature_path,
                                             base_obj_feature_path = self.config.base_obj_feature_path,
@@ -141,9 +146,11 @@ class SaL_Executor(Base_Executor):
             predict_qa_df = pd.read_csv(self.config.qa_predict_path)[["image_id", "question", "answer", "filename"]]
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path, h_scale=1, w_scale=1)
+            obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
             self.predict_data = SaLDataset(     qa_df = predict_qa_df,
                                                 ocr_df = ocr_df,
+                                                obj_df = obj_df,
                                                 tokenizer = self.tokenizer,
                                                 base_ocr_feature_path = self.config.base_ocr_feature_path,
                                                 base_obj_feature_path = self.config.base_obj_feature_path,
