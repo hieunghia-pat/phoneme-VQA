@@ -233,8 +233,79 @@ class SaL(nn.Module):
                     obj_features,
                     max_ocr,
                     max_ques,
-                    max_len=100,):
-        pass
+                    max_len=100,
+                    num_beam=2):
+        start_symbol = self.encoder.pad_token_id
+        end_symbol = self.encoder.eos_token_id
+
+        bz = input_ids.size(0)
+        DEVICE = input_ids.device
+
+        obj_inputs_embeds = self._calculate_obj_embedding(
+                tokenized_obj, obj_coordinates, obj_features)
+        
+        ocr_inputs_embeds = self._calculate_ocr_embedding(
+                tokenized_ocr, ocr_coordinates, ocr_features)
+        
+        ques_inputs_embeds = self.encoder.shared(input_ids)
+
+        multi_modal_feat = torch.cat([ques_inputs_embeds, ocr_inputs_embeds, obj_inputs_embeds], dim=1)
+
+        input_attention_mask = torch.cat(
+            [src_attention_mask, ocr_attention_mask, obj_attention_mask], dim=1)
+        
+        position_bias = self.rel2Dbias(multi_modal_feat, input_attention_mask, ocr_coordinates, max_ques, max_ocr)
+
+        encoder_outputs = self.encoder(
+                attention_mask=input_attention_mask,
+                inputs_embeds=multi_modal_feat,
+                position_bias=position_bias
+            ).last_hidden_state
+        
+        ys = torch.ones(bz, 1).fill_(start_symbol).type(torch.long).to(DEVICE)
+        
+        encoder_outputs = encoder_outputs.to(DEVICE)
+        out = self.decoder(ys, encoder_outputs, input_attention_mask)
+        prob = self.lm_head(out[:, -1])
+
+        values, indices = torch.topk(prob, num_beam, dim=-1)
+        beams = [torch.cat([ys.clone().to(DEVICE), indices[:, i:i+1]], dim = 1) for i in range(num_beam)]
+        beam_probs = [torch.log(values[:, i:i+1]) for i in range(num_beam)]
+
+        done = [False]*num_beam
+        eos_mask = [torch.ones(bz,1).type(torch.long).to(DEVICE)]*num_beam
+
+        for _ in range(max_len-1):
+            
+            for b in range(num_beam):
+
+                out = self.decoder(ys, encoder_outputs, input_attention_mask)
+                prob = self.lm_head(out[:, -1])
+
+                vals, inds =  torch.topk(prob, 1, dim=-1)
+
+                eos_mask[b] *= (inds!=end_symbol)
+
+
+                beams[b] = torch.cat([beams[b], inds], dim=1)
+
+                if eos_mask[b].sum() == 0:
+                    done[b] = True
+                    continue
+                
+                beam_probs[b] += torch.log(vals)*eos_mask[b]
+
+            if all(done):
+                break
+        
+        beam_probs = torch.cat(beam_probs, dim=-1).cpu().detach()
+        beams = torch.stack(beams, dim=1).cpu().detach()
+
+        beam_idx = torch.argmax(beam_probs, dim=-1)
+
+        chosen = beams[torch.tensor([i for i in range(bz)]), beam_idx.flatten(), :]
+        
+        return chosen
         
     
     def _calculate_obj_embedding(self, tokenized_obj, obj_coordinates, obj_features):

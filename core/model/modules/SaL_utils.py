@@ -162,7 +162,9 @@ class SCPRelativePositionBias(RelativePositionBiasBase):
        
         ocr_c_x_index = np.int32(np.floor(x_ocr_c.cpu().detach().numpy()*x_size))
         ocr_c_y_index = np.int32(np.floor(y_ocr_c.cpu().detach().numpy()*x_size))
-        ocr_circle_dist = self.dists_align_all[ocr_c_x_index,ocr_c_y_index][:, :, ocr_c_x_index,ocr_c_y_index][:,:,0,:]
+        
+        bz = ocr_c_x_index.shape[0]
+        ocr_circle_dist = self.dists_align_all[ocr_c_x_index,ocr_c_y_index][np.array([i for i in range(bz)]).reshape(bz,1),:, ocr_c_x_index, ocr_c_y_index]
         ocr_circle_dist = torch.tensor(ocr_circle_dist).to(torch.long)
 
         return ocr_circle_dist
