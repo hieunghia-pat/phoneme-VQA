@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from torch import Optional, Tensor
 from typing import Any, Dict, Optional, Sequence, Union, Tuple
 from transformers import T5Config
-from transformers.models.t5.modeling_t5 import T5Block, T5Stack, T5ForConditionalGeneration, T5Attention, T5PreTrainedModel, T5LayerNorm
+from transformers.models.t5.modeling_t5 import T5Block, T5Stack, T5ForConditionalGeneration, T5Attention, T5PreTrainedModel, T5LayerNorm, T5EncoderModel
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
 
@@ -594,3 +594,51 @@ class T52dForConditionalGeneration(T5ForConditionalGeneration):
 
     def get_encoder(self):
         return self.encoder
+
+
+class T52DEncoderModel(T5EncoderModel):
+    def __init__(self, config):
+        super(T52DEncoderModel, self).__init__(config)
+
+        self.encoder = T52DStack(self.config, self.shared)
+
+        self.init_weights()
+
+    def _init_weights(self, module):
+        """Initialize the weights"""
+        super()._init_weights(module)
+        if isinstance(module, RelativePositionBiasBase):
+            factor = self.config.initializer_factor
+            d_model = self.config.d_model
+            module.relative_attention_bias.weight.data.normal_(mean=0.0, std=factor * ((d_model) ** -0.5))
+
+
+    def get_encoder(self):
+        return self.encoder
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        position_bias = None,
+    ):
+        
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        encoder_outputs = self.encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds,
+            head_mask=head_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            position_bias=position_bias,
+        )
+
+        return encoder_outputs
