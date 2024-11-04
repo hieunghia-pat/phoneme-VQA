@@ -113,7 +113,8 @@ class LaTr(nn.Module):
                  ocr_attention_mask,
                  tokenized_ocr,
                  max_length = 20,
-                 isgreedy = True):
+                 isgreedy = True,
+                 num_beam = 2):
 
         if isgreedy:
             return self.greedy_generate(pixel_values,
@@ -130,7 +131,8 @@ class LaTr(nn.Module):
                                         src_attention_mask,
                                         ocr_attention_mask,
                                         tokenized_ocr,
-                                        max_length)
+                                        max_length,
+                                        num_beam)
     
     def greedy_generate(self, 
                     pixel_values,

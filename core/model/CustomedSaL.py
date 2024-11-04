@@ -128,7 +128,8 @@ class SaL(nn.Module):
                 max_ocr,
                 max_ques,
                 max_length = 20,
-                isgreedy = True):
+                isgreedy = True,
+                num_beam = 2):
 
         
         if isgreedy:
@@ -158,7 +159,8 @@ class SaL(nn.Module):
                                     obj_features,
                                     max_ocr,
                                     max_ques,
-                                    max_length)
+                                    max_length,
+                                    num_beam)
     
     def greedy_generate(self, 
                     input_ids,
