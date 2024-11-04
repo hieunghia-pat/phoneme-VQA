@@ -9,7 +9,7 @@ import pandas as pd
 
 log = get_logger(__name__)
 
-class SaLDataset(BaseDataset):
+class CustomizedSaLDataset(BaseDataset):
     def __init__(self, 
                 qa_df,
                 ocr_df,

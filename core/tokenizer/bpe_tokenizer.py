@@ -41,23 +41,44 @@ class BPE_Tokenizer:
     def __call__(self, text, max_length = None, padding=True, add_special_tokens = True):
 
         if type(text)==list:
-            return self.encode(text, max_length, padding, add_special_tokens)
+            return self.batch_encode(text, max_length, padding, add_special_tokens)
         
-        return self.batch_encode(text, max_length, padding, add_special_tokens)
+        return self.encode(text, max_length, padding, add_special_tokens)
     
     def encode(self, text, max_length = None, padding=True, add_special_tokens = True):
         if add_special_tokens:
-            text = self.bos_token + " " + text +  " " + self.eos_token
-            return self.tokenizer.encode(text, max_length = max_length, padding = "max_length")
+            text = self.bos_token + text + self.eos_token
+            encoding = self.tokenizer.encode(text).ids
+
+            if max_length and padding:
+                encoding += [self.pad_id]*(max_length - len(encoding))
+
+            return encoding
         
-        return self.tokenizer.encode(text, max_length = max_length, padding = False)
+        return self.tokenizer.encode(text).ids
+        
     
     def batch_encode(self, text, max_length = None, padding=True, add_special_tokens = True):
         if add_special_tokens:
-            text = [self.bos_token + " " + t +  " " + self.eos_token for t in text]
-            return self.tokenizer.batch_encode(text, max_length = max_length, padding = "max_length")
+            text = [self.bos_token + t + self.eos_token for t in text]
+            encoding = [t.ids for t in self.tokenizer.encode_batch(text)]
+
+            if max_length and padding:
+                for i in range(len(encoding)):
+                    encoding[i] += [self.pad_id]*(max_length - len(encoding[i]))
+
+            return encoding
         
-        return self.tokenizer.batch_encode(text, max_length = max_length, padding = False)
+        text = [self.bos_token + t + self.eos_token for t in text]
+        encoding = [t.ids for t in self.tokenizer.encode_batch(text)]
+
+        return encoding
+    
+    def decode(self, ids):
+        return self.tokenizer.decode(ids).strip()
+    
+    def batch_decode(self, ids):
+        return [out.strip() for out in self.tokenizer.decode_batch(ids)]
 
     def __len__(self):
         return len(self.tokenizer.get_vocab())

@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import T5EncoderModel, ViTModel, AutoConfig
 from .modules import SinusoidalPositionalEncoding, TokenEmbedding, BaseDecoder 
 
-class PreSTU_config:
+class CustomizedPreSTU_config:
     def build(self, config):
         model_config = AutoConfig.from_pretrained(config.backbone_name)
 
@@ -11,7 +11,7 @@ class PreSTU_config:
         
         return model_config
 
-class PreSTU(nn.Module):
+class CustomizedPreSTU(nn.Module):
     def __init__(self, config, tgt_vocab_size):
         super().__init__()
 

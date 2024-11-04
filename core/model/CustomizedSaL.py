@@ -13,7 +13,7 @@ from .modules import (
     BaseDecoder 
 )
 
-class SaL_config:
+class CustomizedSaL_config:
     def build(self, config, new_token_embedding_size):
         model_config = AutoConfig.from_pretrained(config.backbone_name)
 
@@ -24,7 +24,7 @@ class SaL_config:
         return model_config
 
 
-class SaL(nn.Module):
+class CustomizedSaL(nn.Module):
     def __init__(self, config, tgt_vocab_size, obj_dropout=0.1, ocr_dropout=0.1):
         super().__init__()
 

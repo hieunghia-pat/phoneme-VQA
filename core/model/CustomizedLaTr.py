@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import T5EncoderModel, ViTModel, AutoConfig
 from .modules import SinusoidalPositionalEncoding, TokenEmbedding, BaseDecoder 
 
-class LaTr_config:
+class CustomizedLaTr_config:
     def build(self, config):
         model_config = AutoConfig.from_pretrained(config.encoder_name)
 
@@ -41,7 +41,7 @@ class SpatialModule(nn.Module):
         return layout_feature
 
 
-class LaTr(nn.Module):
+class CustomizedLaTr(nn.Module):
     def __init__(self, config, tgt_vocab_size=300):
         super().__init__()
 

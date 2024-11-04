@@ -9,7 +9,7 @@ import pandas as pd
 
 log = get_logger(__name__)
 
-class PreSTUDataset(BaseDataset):
+class CustomizedPreSTUDataset(BaseDataset):
     def __init__(self, 
                 qa_df,
                 ocr_df,
