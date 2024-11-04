@@ -57,6 +57,8 @@ class CustomizedSaL_Executor(Base_Executor):
                                             obj_attention_mask,
                                             obj_coordinates,
                                             obj_features,
+                                            start_symbol = self.decode_tokenizer.bos_id,
+                                            end_symbol = self.decode_tokenizer.eos_id,
                                             max_ocr=self.config.max_ocr_length,
                                             max_ques=self.config.max_q_length,
                                             max_length = max_length,
@@ -289,7 +291,7 @@ class CustomizedSaL_Executor(Base_Executor):
             
             self.decode_tokenizer = self.build_class(self.config.DecodeTokenizer)(data, 
                                                                                     self.config.bpe_step, 
-                                                                                    self.vocab_save_path, 
+                                                                                    self.config.vocab_save_path, 
                                                                                     self.config.max_vocab_size)
 
         else:

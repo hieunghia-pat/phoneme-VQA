@@ -1,4 +1,4 @@
-EXECUTOR: "LaTr_Executor"
+EXECUTOR: "CustomizedLaTr_Executor"
 DecodeTokenizer: "BPE_Tokenizer"
 
 ## Tokenizer
@@ -31,24 +31,24 @@ max_eval_length: 20
 get_predict_score: TRUE
 
 ##DATA
-ocr_path: "./ocr"
+ocr_path: "/content/swintext_spotter"
 max_ocr_element: 50
 max_ocr_length: 100
 max_q_length: 30
 max_a_length: 128
 
-base_img_path: "./latr_img"
+base_img_path: "/content/ViTextVQA_ViT_image"
 
-qa_train_path: ""
-qa_val_path: ""
-qa_predict_path: ""
+qa_train_path: "/content/ViTextVQA_fcsv/ViTextVQA_train.csv"
+qa_val_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
+qa_predict_path: "/content/ViTextVQA_fcsv/ViTextVQA_test.csv"
 
 NUMWORKERS: 2
 
 ## MODEL
-MODEL_CLASS: "LaTr"
+MODEL_CLASS: "CustomizedLaTr"
 
-MODEL_MOD_CONFIG_CLASS: "LaTr_config" # model modified config class
+MODEL_MOD_CONFIG_CLASS: "CustomizedLaTr_config" # model modified config class
 
 backbone_name: "VietAI/vit5-base"
 
@@ -56,8 +56,14 @@ vit_model_name: "google/vit-base-patch16-224-in21k"
 
 max_2d_position_embeddings: 1024
 
+num_decoder_layers: 4
+
+encoder_name: "VietAI/vit5-base"
+
+n_head: 12
+
 ## Inference
 
-isgreedy: False
-num_beam: 2
+isgreedy: True
+num_beam: 1
 
