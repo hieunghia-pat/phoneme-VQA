@@ -10,7 +10,7 @@ from logger.logger import get_logger
 
 from core.model import *
 from core.data import *
-from core.data import textlayout_ocr_adapt
+from core.tokenizer import *
 
 from timeit import default_timer as timer
 

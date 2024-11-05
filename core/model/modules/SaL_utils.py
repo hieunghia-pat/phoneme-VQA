@@ -11,7 +11,7 @@ from torch import nn
 import numpy as np
 import random
 from abc import ABC, abstractmethod
-from torch import Optional, Tensor
+from torch import Tensor
 from typing import Any, Dict, Optional, Sequence, Union, Tuple
 from transformers import T5Config
 from transformers.models.t5.modeling_t5 import T5Block, T5Stack, T5ForConditionalGeneration, T5Attention, T5PreTrainedModel, T5LayerNorm, T5EncoderModel

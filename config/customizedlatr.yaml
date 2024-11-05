@@ -1,10 +1,10 @@
 EXECUTOR: "CustomizedLaTr_Executor"
-DecodeTokenizer: "BPE_Tokenizer"
 
 ## Tokenizer
 
+DecodeTokenizer: "BPE_Tokenizer"
 bpe_step: 1000
-vocab_save_path: "PhonoVQA/models/vocab.json"
+vocab_save_path: "PhonoVQA/bpevocab.json"
 max_vocab_size: 3000
 
 ## Training param
@@ -41,7 +41,7 @@ base_img_path: "/content/ViTextVQA_ViT_image"
 
 qa_train_path: "/content/ViTextVQA_fcsv/ViTextVQA_train.csv"
 qa_val_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
-qa_predict_path: "/content/ViTextVQA_fcsv/ViTextVQA_test.csv"
+qa_predict_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
 
 NUMWORKERS: 2
 

@@ -11,7 +11,7 @@ class BPE_Tokenizer:
     def __init__(self,
                 data = None,
                 step  = None,
-                save_path = "PhonoVQA/models/vocab.json",
+                save_path = "PhonoVQA/bpevocab.json",
                 max_vocab_size = 5000,
                 pad_token = "<pad>",
                 bos_token = "<bos>",
