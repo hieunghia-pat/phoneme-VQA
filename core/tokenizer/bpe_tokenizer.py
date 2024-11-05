@@ -7,6 +7,10 @@ from tokenizers import (
     Tokenizer,
 )
 
+from logger.logger import get_logger
+
+log = get_logger(__name__)
+
 class BPE_Tokenizer:
     def __init__(self,
                 data = None,
@@ -26,9 +30,11 @@ class BPE_Tokenizer:
         self.special_tokens = [pad_token, bos_token, eos_token, unk_token]
         
         if os.path.isfile(save_path):
+            log.info(f"Loading trained bpe tokenizer from {save_path}")
             self.tokenizer = self.load_vocab(save_path)
         
         else:
+            log.info(f"Creating bpe tokenizer with {max_vocab_size} max vocab")
 
             self.tokenizer = BPE_Tokenizer.create_BPEtokenizer(max_vocab_size, data, step, self.special_tokens, self.unk_token)
             

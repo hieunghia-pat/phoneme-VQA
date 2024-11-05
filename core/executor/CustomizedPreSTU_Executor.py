@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.model import CustomizedPreSTU, CustomizedPreSTU_config
 from core.data import textlayout_ocr_adapt, CustomizedPreSTUDataset
 from core.tokenizer import *
 
@@ -44,6 +43,8 @@ class CustomizedPreSTU_Executor(Base_Executor):
                                             input_ids,
                                             src_attention_mask,
                                             max_length = max_length,
+                                            start_symbol = self.decode_tokenizer.bos_id,
+                                            end_symbol = self.decode_tokenizer.eos_id,
                                             isgreedy = self.config.isgreedy,
                                             num_beam = self.config.num_beam)
 
@@ -90,7 +91,7 @@ class CustomizedPreSTU_Executor(Base_Executor):
 
     def _init_eval_predict_mode(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)
-        self.decode_tokenizer = self._create_decode_tokenizer()
+        self._create_decode_tokenizer()
 
         if self.mode == "eval":
             print("###Load eval data ...")
@@ -221,10 +222,12 @@ class CustomizedPreSTU_Executor(Base_Executor):
         if "BPE" in self.config.DecodeTokenizer:
             if frames:
                 data = self._prepare_bpe_frames(frames)
+            else:
+                data = None
             
             self.decode_tokenizer = self.build_class(self.config.DecodeTokenizer)(data, 
                                                                                     self.config.bpe_step, 
-                                                                                    self.vocab_save_path, 
+                                                                                    self.config.vocab_save_path, 
                                                                                     self.config.max_vocab_size)
 
         else:

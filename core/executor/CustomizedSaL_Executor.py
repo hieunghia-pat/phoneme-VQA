@@ -10,7 +10,6 @@ from typing_extensions import override
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.model import CustomizedSaL, CustomizedSaL_config
 from core.data import textlayout_ocr_adapt, textlayout_obj_adapt, CustomizedSaLDataset
 from core.tokenizer import *
 
@@ -136,7 +135,7 @@ class CustomizedSaL_Executor(Base_Executor):
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.backbone_name)
         self.tokenizer.add_tokens([self.config.context_token])
 
-        self.decode_tokenizer = self._create_decode_tokenizer()
+        self._create_decode_tokenizer()
 
         if self.mode == "eval":
             print("###Load eval data ...")
@@ -288,6 +287,8 @@ class CustomizedSaL_Executor(Base_Executor):
         if "BPE" in self.config.DecodeTokenizer:
             if frames:
                 data = self._prepare_bpe_frames(frames)
+            else:
+                data = None
             
             self.decode_tokenizer = self.build_class(self.config.DecodeTokenizer)(data, 
                                                                                     self.config.bpe_step, 

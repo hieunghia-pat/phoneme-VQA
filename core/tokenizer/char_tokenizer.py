@@ -24,6 +24,8 @@ class CharTokenizer:
         }
 
         self.pad_id = self.str2idx[self.pad_token]
+        self.bos_id = self.str2idx[self.bos_token]
+        self.eos_id = self.str2idx[self.eos_token]
     
     def __call__(self, text, max_length = None, padding=True, add_special_tokens=True):
         if type(text)==list:

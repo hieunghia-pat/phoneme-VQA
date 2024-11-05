@@ -19,7 +19,9 @@ class CustomizedSaL_config:
 
         model_config.update({"ocr_hidden" : config.ocr_hidden,
                                 "obj_hidden" : config.obj_hidden,
-                                "new_token_embedding_size": new_token_embedding_size})
+                                "new_token_embedding_size": new_token_embedding_size,
+                                "num_decoder_layers": config.num_decoder_layers,
+                                "n_head": config.n_head})
         
         return model_config
 
@@ -52,7 +54,9 @@ class CustomizedSaL(nn.Module):
         self.positional_encoding = SinusoidalPositionalEncoding(
             self.encoder.config.d_model, dropout=0.1)
 
-        self.decoder = BaseDecoder(emb_size = self.encoder.config.d_model, num_layers = self.config.num_decoder_layers)
+        self.decoder = BaseDecoder(emb_size = self.encoder.config.d_model, 
+                                num_layers = self.config.num_decoder_layers,
+                                n_head = self.config.n_head)
         self.lm_head = nn.Linear(self.encoder.config.d_model, tgt_vocab_size)
         
 
@@ -99,13 +103,13 @@ class CustomizedSaL(nn.Module):
                                         label_attention_mask)
 
 
-        return self.encoder.lm_head(decoder_outputs)
+        return self.lm_head(decoder_outputs)
     
-    def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask):
-        square_subsequent_mask = self._create_square_subsequent_mask(labels)
+    def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask=None):
+        square_subsequent_mask = self._create_square_subsequent_mask(labels.size(1), device=labels.device)
         
         label_embedding = self.positional_encoding(
-                                self.trg_tok_emb(labels))
+                                self.tgt_tok_emb(labels))
 
         return self.decoder(label_embedding,
                             encoder_outputs,
@@ -127,6 +131,8 @@ class CustomizedSaL(nn.Module):
                 obj_features,
                 max_ocr,
                 max_ques,
+                start_symbol,
+                end_symbol,
                 max_length = 20,
                 isgreedy = True,
                 num_beam = 2):
@@ -145,6 +151,8 @@ class CustomizedSaL(nn.Module):
                                         obj_features,
                                         max_ocr,
                                         max_ques,
+                                        start_symbol,
+                                        end_symbol,
                                         max_length)
 
         return self.beam_generate(input_ids,
@@ -159,6 +167,8 @@ class CustomizedSaL(nn.Module):
                                     obj_features,
                                     max_ocr,
                                     max_ques,
+                                    start_symbol,
+                                    end_symbol,
                                     max_length,
                                     num_beam)
     
@@ -175,11 +185,11 @@ class CustomizedSaL(nn.Module):
                     obj_features,
                     max_ocr,
                     max_ques,
+                    start_symbol,
+                    end_symbol,
                     max_len=100):
         
-        start_symbol = self.encoder.pad_token_id
-        end_symbol = self.encoder.eos_token_id
-
+        
         bz = input_ids.size(0)
         DEVICE = input_ids.device
 
@@ -235,11 +245,11 @@ class CustomizedSaL(nn.Module):
                     obj_features,
                     max_ocr,
                     max_ques,
+                    start_symbol,
+                    end_symbol,
                     max_len=100,
                     num_beam=2):
-        start_symbol = self.encoder.pad_token_id
-        end_symbol = self.encoder.eos_token_id
-
+        
         bz = input_ids.size(0)
         DEVICE = input_ids.device
 
@@ -320,7 +330,7 @@ class CustomizedSaL(nn.Module):
             + self.ocr_feature_layer_norm(self.ocr_bbox_projector(ocr_coordinates))\
             + self.encoder.shared(tokenized_ocr)
     
-    def _create_square_subsequent_mask(self, sz):
-        mask = (torch.triu(torch.ones((sz, sz), device=sz.device)) == 1).transpose(0, 1)
+    def _create_square_subsequent_mask(self, sz, device="cuda"):
+        mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask

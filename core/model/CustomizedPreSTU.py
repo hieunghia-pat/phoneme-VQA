@@ -7,8 +7,10 @@ class CustomizedPreSTU_config:
     def build(self, config):
         model_config = AutoConfig.from_pretrained(config.backbone_name)
 
-        model_config.update({"vit_model" : config.vit_model_name})
-        
+        model_config.update({"vit_model" : config.vit_model_name,
+                            "num_decoder_layers": config.num_decoder_layers,
+                            "n_head": config.n_head})
+                            
         return model_config
 
 class CustomizedPreSTU(nn.Module):
@@ -28,7 +30,9 @@ class CustomizedPreSTU(nn.Module):
         self.positional_encoding = SinusoidalPositionalEncoding(
             self.encoder.config.d_model, dropout=0.1)
 
-        self.decoder = BaseDecoder(emb_size = self.encoder.config.d_model, num_layers = self.config.num_decoder_layers)
+        self.decoder = BaseDecoder(emb_size = self.encoder.config.d_model, 
+                                num_layers = self.config.num_decoder_layers,
+                                n_head = self.config.n_head)
         self.lm_head = nn.Linear(self.encoder.config.d_model, tgt_vocab_size)
 
 
@@ -53,13 +57,13 @@ class CustomizedPreSTU(nn.Module):
                                         label_attention_mask)
 
 
-        return self.encoder.lm_head(decoder_outputs)
+        return self.lm_head(decoder_outputs)
     
-    def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask):
-        square_subsequent_mask = self._create_square_subsequent_mask(labels)
+    def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask=None):
+        square_subsequent_mask = self._create_square_subsequent_mask(labels.size(1), device=labels.device)
         
         label_embedding = self.positional_encoding(
-                                self.trg_tok_emb(labels))
+                                self.tgt_tok_emb(labels))
 
         return self.decoder(label_embedding,
                             encoder_outputs,
@@ -76,6 +80,8 @@ class CustomizedPreSTU(nn.Module):
                  src_attention_mask,
                  ocr_attention_mask,
                  tokenized_ocr,
+                 start_symbol,
+                 end_symbol,
                  max_length = 20,
                  isgreedy = True,
                  num_beam = 2):
@@ -87,6 +93,8 @@ class CustomizedPreSTU(nn.Module):
                                         src_attention_mask,
                                         ocr_attention_mask,
                                         tokenized_ocr,
+                                        start_symbol,
+                                        end_symbol,
                                         max_length)
 
         return self.beam_generate(pixel_values,
@@ -95,6 +103,8 @@ class CustomizedPreSTU(nn.Module):
                                         src_attention_mask,
                                         ocr_attention_mask,
                                         tokenized_ocr,
+                                        start_symbol,
+                                        end_symbol,
                                         max_length,
                                         num_beam)
     
@@ -105,11 +115,10 @@ class CustomizedPreSTU(nn.Module):
                     src_attention_mask,
                     ocr_attention_mask,
                     tokenized_ocr,
+                    start_symbol,
+                    end_symbol,
                     max_len=100):
         
-        start_symbol = self.encoder.pad_token_id
-        end_symbol = self.encoder.eos_token_id
-
         bz = input_ids.size(0)
         DEVICE = input_ids.device
 
@@ -126,7 +135,7 @@ class CustomizedPreSTU(nn.Module):
         for i in range(max_len):
             encoder_outputs = encoder_outputs.to(DEVICE)
 
-            out = self.decoder(ys, encoder_outputs, attention_mask)
+            out = self.decode(ys, encoder_outputs, attention_mask)
 
             prob = self.lm_head(out[:, -1])
 
@@ -146,12 +155,12 @@ class CustomizedPreSTU(nn.Module):
                     src_attention_mask,
                     ocr_attention_mask,
                     tokenized_ocr,
+                    start_symbol,
+                    end_symbol,
                     max_len=100, 
                     num_beam=2):
 
-        start_symbol = self.encoder.pad_token_id
-        end_symbol = self.encoder.eos_token_id
-
+        
         bz = input_ids.size(0)
         DEVICE = input_ids.device
 
@@ -166,7 +175,7 @@ class CustomizedPreSTU(nn.Module):
         ys = torch.ones(bz, 1).fill_(start_symbol).type(torch.long).to(DEVICE)
         
         encoder_outputs = encoder_outputs.to(DEVICE)
-        out = self.decoder(ys, encoder_outputs, attention_mask)
+        out = self.decode(ys, encoder_outputs, attention_mask)
         prob = self.lm_head(out[:, -1])
 
         values, indices = torch.topk(prob, num_beam, dim=-1)
@@ -180,7 +189,7 @@ class CustomizedPreSTU(nn.Module):
             
             for b in range(num_beam):
 
-                out = self.decoder(ys, encoder_outputs, attention_mask)
+                out = self.decode(ys, encoder_outputs, attention_mask)
                 prob = self.lm_head(out[:, -1])
 
                 vals, inds =  torch.topk(prob, 1, dim=-1)
@@ -223,7 +232,7 @@ class CustomizedPreSTU(nn.Module):
 
         return multi_modal_feat, input_attention_mask
 
-    def _create_square_subsequent_mask(self, sz):
-        mask = (torch.triu(torch.ones((sz, sz), device=sz.device)) == 1).transpose(0, 1)
+    def _create_square_subsequent_mask(self, sz, device="cuda"):
+        mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
