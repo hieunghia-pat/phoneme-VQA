@@ -1,10 +1,9 @@
 import json
+import string
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from word_processing import is_Vietnamese
-
-
 class PhonemeEmbedding(nn.Module):
     def __init__(self, vocab_file, embedding_dim=128, dropout_rate=0.1):
         super(PhonemeEmbedding, self).__init__()
@@ -20,6 +19,12 @@ class PhonemeEmbedding(nn.Module):
 
     def init_embeddings(self):
         # Create embeddings for each type of phoneme: onset, rhyme, tone
+        self.onset_embedding = nn.Embedding(len(self.phonemes['onset']), self.embedding_dim).to(self.device)
+        self.rhyme_embedding = nn.Embedding(len(self.phonemes['rhyme']), self.embedding_dim).to(self.device)
+        self.tone_embedding = nn.Embedding(len(self.phonemes['tone']), self.embedding_dim).to(self.device)
+
+    def update_embeddings(self):
+        # Update the embedding layers to accommodate new vocabulary items
         self.onset_embedding = nn.Embedding(len(self.phonemes['onset']), self.embedding_dim).to(self.device)
         self.rhyme_embedding = nn.Embedding(len(self.phonemes['rhyme']), self.embedding_dim).to(self.device)
         self.tone_embedding = nn.Embedding(len(self.phonemes['tone']), self.embedding_dim).to(self.device)
@@ -40,9 +45,23 @@ class PhonemeEmbedding(nn.Module):
                 onset, rhyme, tone = phoneme_tuple
 
                 # Ensure all phonemes are in the vocabulary (handle None case)
-                onset_idx = self.phonemes['onset'].get(onset, self.phonemes['onset'].get('null', 0))
-                rhyme_idx = self.phonemes['rhyme'].get(rhyme, self.phonemes['rhyme'].get('null', 0))
-                tone_idx = self.phonemes['tone'].get(tone, self.phonemes['tone'].get('null', 0))
+                onset_idx = self.phonemes['onset'].get(onset, None)
+                if onset_idx is None:
+                    onset_idx = len(self.phonemes['onset'])
+                    self.phonemes['onset'][onset] = onset_idx
+                    self.update_embeddings()
+
+                rhyme_idx = self.phonemes['rhyme'].get(rhyme, None)
+                if rhyme_idx is None:
+                    rhyme_idx = len(self.phonemes['rhyme'])
+                    self.phonemes['rhyme'][rhyme] = rhyme_idx
+                    self.update_embeddings()
+
+                tone_idx = self.phonemes['tone'].get(tone, None)
+                if tone_idx is None:
+                    tone_idx = len(self.phonemes['tone'])
+                    self.phonemes['tone'][tone] = tone_idx
+                    self.update_embeddings()
 
                 # Get embeddings
                 onset_emb = self.onset_embedding(torch.tensor([onset_idx], device=self.device))
@@ -73,7 +92,12 @@ class PhonemeEmbedding(nn.Module):
 
                 # Process each character as if it were an onset, with no rhyme or tone
                 for char in chars:
-                    onset_idx = self.phonemes['onset'].get(char, self.phonemes['onset'].get('null', 0))
+                    onset_idx = self.phonemes['onset'].get(char, None)
+                    if onset_idx is None:
+                        onset_idx = len(self.phonemes['onset'])
+                        self.phonemes['onset'][char] = onset_idx
+                        self.update_embeddings()
+
                     onset_emb = self.onset_embedding(torch.tensor([onset_idx], device=self.device))
 
                     # Use 'null' index for rhyme and tone
@@ -114,38 +138,28 @@ class PhonemeEmbedding(nn.Module):
         # Handle spaces between words
         if len(words) > 1:
             for i in range(len(words) - 1):
-                space_emb = self.onset_embedding(torch.tensor([self.phonemes['onset'][' ']], device=self.device))
+                # Ensure '<_>' is in the vocabulary
+                if '<_>' not in self.phonemes['onset']:
+                    self.phonemes['onset']['<_>'] = len(self.phonemes['onset'])
+                    self.update_embeddings()
+
+                onset_emb = self.onset_embedding(torch.tensor([self.phonemes['onset']['<_>']], device=self.device))
                 rhyme_emb = self.rhyme_embedding(torch.tensor([self.phonemes['rhyme']['null']], device=self.device))
                 tone_emb = self.tone_embedding(torch.tensor([self.phonemes['tone']['null']], device=self.device))
 
-                cat_space_emb = torch.cat((space_emb, rhyme_emb, tone_emb), dim=-1)
+                cat_space_emb = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
 
                 details.insert(2 * i + 1, {
                     'word': '<_>',
+                    'onset': '<_>',
+                    'onset_embedding': onset_emb.squeeze(0),
+                    'rhyme': 'none',
+                    'rhyme_embedding': rhyme_emb.squeeze(0),
+                    'tone': 'none',
+                    'tone_embedding': tone_emb.squeeze(0),
                     'word_embedding': cat_space_emb,
                     'source': 'space'
                 })
 
         return details, torch.cat([details[i]['word_embedding'] for i in range(len(details))])
 
-# Example of using PhonemeEmbedding
-vocab_file = 'vocab.json'
-phoneme_embedding_model = PhonemeEmbedding(vocab_file, embedding_dim=128, dropout_rate=0.1)
-sentence = 'ngu'
-details, sent_embed = phoneme_embedding_model(sentence)
-for detail in details:
-    print(f"Word: {detail['word']}")
-    if 'onset' in detail:
-        print(f"  Onset: {detail['onset']} - Tensor: {detail['onset_embedding']}")
-        print(f"  Rhyme: {detail['rhyme']} - Tensor: {detail['rhyme_embedding']}")
-        print(f"  Tone: {detail['tone']} - Tensor: {detail['tone_embedding']}")
-    if 'characters' in detail and detail['characters'] is not None:
-        for char_detail in detail['characters']:
-            print(f"  Character: {char_detail['character']}")
-            print(f"    Onset: {char_detail['onset']} - Tensor: {char_detail['onset_embedding']}")
-            print(f"    Rhyme: {char_detail['rhyme']} - Tensor: {char_detail['rhyme_embedding']}")
-            print(f"    Tone: {char_detail['tone']} - Tensor: {char_detail['tone_embedding']}")
-            print(f"    Embedding: {char_detail['embedding']} - Source: {char_detail['source']}")
-    if 'word_embedding' in detail:
-        print(f"  Word Embedding for '{detail['word']}': {detail['word_embedding']}.shape")
-    print(f"  Source: {detail['source']}")
