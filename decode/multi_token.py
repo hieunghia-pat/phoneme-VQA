@@ -48,7 +48,7 @@ class MultiTokensPredictor(nn.Module):
 
         # Transformer Layers
         self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=model_dim, nhead=8, dim_feedforward=2048, dropout=dropout_rate),
+            nn.TransformerEncoderLayer(d_model=model_dim, nhead=8, dim_feedforward=2048, dropout=dropout_rate, batch_first=True),
             num_layers=6
         )
 
@@ -63,69 +63,68 @@ class MultiTokensPredictor(nn.Module):
         # Dropout layer
         self.dropout = nn.Dropout(dropout_rate)
 
-    def forward(self, sentence):
-        if isinstance(sentence, list):
-            sentence = sentence[0]
-        words = sentence.split()
+    def forward(self, word):
         embeddings_list = []
 
-        # Get phoneme embeddings for each word
-        for word in words:
+        # Get phoneme embeddings for each character/space
+        if word.isspace():
+            is_vietnamese, phoneme_tuple = is_Vietnamese(word)
+            onset, rhyme, tone = phoneme_tuple
+            onset_emb = self.phoneme_embedding.onset_embedding(torch.tensor([self.phoneme_embedding.phonemes['onset'].get(onset, 0)], device=self.phoneme_embedding.device))
+            rhyme_emb = self.phoneme_embedding.rhyme_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get(rhyme, 0)], device=self.phoneme_embedding.device))
+            tone_emb = self.phoneme_embedding.tone_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get(tone, 0)], device=self.phoneme_embedding.device))
+            char_emb = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
+            char_emb = self.dropout(char_emb)
+            embeddings_list.append(char_emb.squeeze(0))
+        else:
             is_vietnamese, phoneme_tuple = is_Vietnamese(word)
             if is_vietnamese:
                 onset, rhyme, tone = phoneme_tuple
                 onset_emb = self.phoneme_embedding.onset_embedding(torch.tensor([self.phoneme_embedding.phonemes['onset'].get(onset, 0)], device=self.phoneme_embedding.device))
                 rhyme_emb = self.phoneme_embedding.rhyme_embedding(torch.tensor([self.phoneme_embedding.phonemes['rhyme'].get(rhyme, 0)], device=self.phoneme_embedding.device))
                 tone_emb = self.phoneme_embedding.tone_embedding(torch.tensor([self.phoneme_embedding.phonemes['tone'].get(tone, 0)], device=self.phoneme_embedding.device))
-                word_emb = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
-                word_emb = self.dropout(word_emb)
-                embeddings_list.append(word_emb.squeeze(0))
+                char_emb = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
+                char_emb = self.dropout(char_emb)
+                embeddings_list.append(char_emb.squeeze(0))
             else:
-                # Handle non-Vietnamese words by treating each character as a separate phoneme prediction
+                is_vietnamese, phoneme_tuple = is_Vietnamese(word)
+                onset, rhyme, tone = phoneme_tuple
                 for char in word:
+                    # Handle non-Vietnamese characters by treating each as a separate phoneme prediction
                     onset_emb = self.phoneme_embedding.onset_embedding(torch.tensor([self.phoneme_embedding.phonemes['onset'].get(char, 0)], device=self.phoneme_embedding.device))
-                    rhyme_emb = self.phoneme_embedding.rhyme_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get('none', 0)], device=self.phoneme_embedding.device))
-                    tone_emb = self.phoneme_embedding.tone_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get('none', 0)], device=self.phoneme_embedding.device))
+                    rhyme_emb = self.phoneme_embedding.rhyme_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get(rhyme, 0)], device=self.phoneme_embedding.device))
+                    tone_emb = self.phoneme_embedding.tone_embedding(torch.tensor([self.phoneme_embedding.phonemes['none'].get(tone, 0)], device=self.phoneme_embedding.device))
                     char_emb = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
                     char_emb = self.dropout(char_emb)
                     embeddings_list.append(char_emb.squeeze(0))
 
-        # Stack embeddings for all words/characters in the sentence
+        # Check if embeddings_list is empty
+        if not embeddings_list:
+            raise ValueError("The input sentence did not produce any embeddings. Please provide a valid input.")
+
+        # Stack embeddings for all characters/spaces in the sentence
         embeddings = torch.stack(embeddings_list).unsqueeze(0)  # (1, num_tokens, embedding_dim)
 
         # Add positional encoding
         embedded_vectors = self.positional_encoding(embeddings)  # (batch_size=1, seq_len=num_tokens, d_model)
 
-        # Transformer expects (seq_len, batch_size, feature_dim)
-        embedded_vectors = embedded_vectors.permute(1, 0, 2)  # (seq_len, batch_size, d_model)
-
         # Pass through transformer encoder
-        transformer_output = self.transformer_encoder(embedded_vectors)  # (seq_len, batch_size, d_model)
+        transformer_output = self.transformer_encoder(embedded_vectors)  # (batch_size, seq_len, d_model)
 
         # Apply mean pooling over sequence length
-        pooled_output = transformer_output.permute(1, 0, 2).squeeze(0)  # (num_tokens, d_model)
+        pooled_output = transformer_output.squeeze(0)  # (num_tokens, d_model)
 
         # Predict phoneme components using independent heads for each token
         predictions_list = []
-        for i, word in enumerate(words):
-            is_vietnamese, _ = is_Vietnamese(word)
-            if is_vietnamese:
-                predictions = {}
-                for key in self.output_heads.keys():
-                    head_output = self.output_heads[key](pooled_output[i].unsqueeze(0))
-                    predictions[key] = F.log_softmax(head_output, dim=-1).squeeze(0)
-                predictions_list.append(predictions)
-            else:
-                for j, char in enumerate(word):
-                    predictions = {}
-                    onset = char
-                    for key in self.output_heads.keys():
-                        if key == 'onset':
-                            idx = self.phoneme_embedding.phonemes['onset'].get(onset, 0)
-                        else:
-                            idx = self.phoneme_embedding.phonemes['none'].get('none', 0)
-                        head_output = self.output_heads[key](pooled_output[i + j].unsqueeze(0))
-                        predictions[key] = F.log_softmax(head_output, dim=-1).squeeze(0)
-                    predictions_list.append(predictions)
+        for i in range(pooled_output.size(0)):
+            predictions = {}
+            for key in self.output_heads.keys():
+                head_output = self.output_heads[key](pooled_output[i].unsqueeze(0))
+                predictions[key] = F.log_softmax(head_output, dim=-1).squeeze(0)
+            predictions_list.append(predictions)
 
         return predictions_list
+
+
+
+
