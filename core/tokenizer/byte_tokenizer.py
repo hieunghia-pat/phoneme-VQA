@@ -5,39 +5,43 @@ class ByteTokenizer:
     def __init__(self):
         pass
     
-    def __call__(self, text, max_len = None, padding=True, add_special_tokens = True):
+    def __call__(self, text, max_length = None, padding=True, add_special_tokens = True):
         if type(text)==list:
-            return self.batch_encode(text, max_len, padding, add_special_tokens)
+            return self.batch_encode(text, max_length, padding, add_special_tokens)
 
-        return self.encode(text, max_len, padding, add_special_tokens)
+        return self.encode(text, max_length, padding, add_special_tokens)
     
-    def encode(self, text, max_len = None, padding=True, add_special_tokens = True):
+    def __len__(self):
+        return 256 + 3
+    
+    def encode(self, text, max_length = None, padding=True, add_special_tokens = True):
         byte_seq = list(text.encode(encoding = 'UTF-8'))
         length = len(byte_seq) + 2
 
         #truncate if necessary
-        if max_len is None:
-            max_len = length
+        if max_length is None:
+            max_length = length
 
-        if length > max_len:
-            byte_seq = byte_seq[:max_len]
+        if length > max_length:
+            byte_seq = byte_seq[:max_length-2]
+            length = max_length
         
         if add_special_tokens:
-            return self.add_special_tokens(byte_seq, length, max_len, padding)    
+            return self.add_special_tokens(byte_seq, length, max_length, padding)    
 
         return byte_seq
     
-    def batch_encode(self, texts, max_len = None, padding = True, add_special_tokens = True):
+    def batch_encode(self, texts, max_length = None, padding = True, add_special_tokens = True):
         encodings = []
 
         for text in texts:
-            encodings.append(self.encode(text, max_len, padding, add_special_tokens))
+            encodings.append(self.encode(text, max_length, padding, add_special_tokens))
         return encodings
     
-    def add_special_tokens(self, encoding, length, max_len, padding):
+    def add_special_tokens(self, encoding, length, max_length, padding):
         
         if padding:
-            return [self.bos_id] + encoding + [self.eos_id] + [self.pad_id]*(max_len-length)
+            return [self.bos_id] + encoding + [self.eos_id] + [self.pad_id]*(max_length-length)
 
         return [self.bos_id] + encoding + [self.eos_id] 
     
