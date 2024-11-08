@@ -602,6 +602,8 @@ class T52DEncoderModel(T5EncoderModel):
     def __init__(self, config):
         super(T52DEncoderModel, self).__init__(config)
 
+        self.config.use_cache = False
+
         self.encoder = T52DStack(self.config, self.shared)
 
         self.init_weights()

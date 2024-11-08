@@ -219,7 +219,7 @@ class CustomizedSaL(nn.Module):
         for i in range(max_len):
             encoder_outputs = encoder_outputs.to(DEVICE)
 
-            out = self.decoder(ys, encoder_outputs, input_attention_mask)
+            out = self.decode(ys, encoder_outputs, input_attention_mask)
 
             prob = self.lm_head(out[:, -1])
 
@@ -277,7 +277,7 @@ class CustomizedSaL(nn.Module):
         ys = torch.ones(bz, 1).fill_(start_symbol).type(torch.long).to(DEVICE)
         
         encoder_outputs = encoder_outputs.to(DEVICE)
-        out = self.decoder(ys, encoder_outputs, input_attention_mask)
+        out = self.decode(ys, encoder_outputs, input_attention_mask)
         prob = self.lm_head(out[:, -1])
 
         values, indices = torch.topk(prob, num_beam, dim=-1)
@@ -291,7 +291,7 @@ class CustomizedSaL(nn.Module):
             
             for b in range(num_beam):
 
-                out = self.decoder(ys, encoder_outputs, input_attention_mask)
+                out = self.decode(ys, encoder_outputs, input_attention_mask)
                 prob = self.lm_head(out[:, -1])
 
                 vals, inds =  torch.topk(prob, 1, dim=-1)

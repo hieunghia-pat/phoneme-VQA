@@ -79,13 +79,13 @@ class CustomizedSaLDataset(BaseDataset):
 
         return {
             'input_ids': torch.tensor([self.data['input_ids'][index]], dtype=torch.int64).squeeze(0),
-            'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.int64).squeeze(0),
+            'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'label_ids': label_ids,
             'label_attention_mask': label_attention_mask,
             'tokenized_ocr': torch.tensor([self.data['tokenized_ocr'][index]], dtype=torch.int64).squeeze(0),
-            'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.int64).squeeze(0),
+            'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'ocr_coordinates': torch.tensor([self.data['ocr_coordinates'][index]], dtype=torch.float).squeeze(0),
-            'obj_attention_mask': torch.tensor([self.data['obj_attention_mask'][index]], dtype=torch.int64).squeeze(0),
+            'obj_attention_mask': torch.tensor([self.data['obj_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'obj_coordinates': torch.tensor([self.data['obj_coordinates'][index]], dtype=torch.float).squeeze(0),
             'tokenized_obj': torch.tensor([self.data['tokenized_obj'][index]], dtype=torch.int64).squeeze(0),
             'ocr_features': ocr_features,
@@ -129,7 +129,7 @@ class CustomizedSaLDataset(BaseDataset):
                                         max_length = self.max_input_length,
                                         truncation = True)
             
-            answer_encoding = self.tokenizer(dataframe['answer'][i].strip(),
+            answer_encoding = self.decode_tokenizer(dataframe['answer'][i].strip(),
                                                 max_length = self.max_output_length,
                                                 )
             
