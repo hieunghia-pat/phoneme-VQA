@@ -51,7 +51,8 @@ class CharTokenizer:
             max_length = length
 
         if length > max_length:
-            char_seq = char_seq[:max_length]
+            char_seq = char_seq[:max_length-2]
+            length = max_length
         
         if add_special_tokens:
             return self.add_special_tokens(char_seq, length, max_length, padding)    
