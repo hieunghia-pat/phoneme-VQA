@@ -9,21 +9,12 @@ import string
 from word_processing import is_Vietnamese
 
 class VocabBuilder:
-    def __init__(self, dataset_dir: str):
-        self.dataset_dir = dataset_dir
-        self.annotation_paths = self.get_annotation_files()
-        self.vocab = {'onset': {' ': 0}, 'rhyme': {'null': 0}, 'tone': {}, 'none': {'none': 0}}
+    def __init__(self, annotation_paths: list[str]):
+        self.annotation_paths = annotation_paths
+        self.vocab = {'onset': {'none': 0, ' ': 1, '<_>': 2}, 'rhyme': {'none': 0}, 'tone': {'none': 0},'none':{'none': 0}}
         self.word_sources = {'onset': {}, 'rhyme': {}, 'tone': {}}
         self.text_sources = {'rhyme': {}}
         self.word_counts = self.create_vocab()
-
-    def get_annotation_files(self) -> list[str]:
-        # Get all JSON files in the dataset directory
-        annotation_files = [
-            os.path.join(self.dataset_dir, filename) for filename in os.listdir(self.dataset_dir)
-            if filename.endswith('.json')
-        ]
-        return annotation_files
 
     def create_vocab(self) -> dict[str, int]:
         for annotation_path in self.annotation_paths:
@@ -44,35 +35,57 @@ class VocabBuilder:
                             is_viet, (onset, rhyme, tone) = is_Vietnamese(word)
                             if is_viet:
                                 # Add onset to vocab
+                                onset = onset.lower() if onset else 'none'
                                 if onset not in self.vocab['onset']:
                                     self.vocab['onset'][onset] = len(self.vocab['onset'])
                                     self.word_sources['onset'][onset] = [word]
                                 else:
-                                    self.word_sources['onset'][onset].append(word)
+                                    if onset not in self.word_sources['onset']:
+                                        self.word_sources['onset'][onset] = [word]
+                                    else:
+                                        self.word_sources['onset'][onset].append(word)
 
                                 # Add rhyme to vocab
+                                rhyme = rhyme.lower() if rhyme else 'none'
                                 if rhyme not in self.vocab['rhyme']:
                                     self.vocab['rhyme'][rhyme] = len(self.vocab['rhyme'])
                                     self.word_sources['rhyme'][rhyme] = [word]
                                     self.text_sources['rhyme'][rhyme] = [text]
                                 else:
-                                    self.word_sources['rhyme'][rhyme].append(word)
-                                    self.text_sources['rhyme'][rhyme].append(text)
+                                    if rhyme not in self.word_sources['rhyme']:
+                                        self.word_sources['rhyme'][rhyme] = [word]
+                                    else:
+                                        self.word_sources['rhyme'][rhyme].append(word)
+
+                                    if rhyme not in self.text_sources['rhyme']:
+                                        self.text_sources['rhyme'][rhyme] = [text]
+                                    else:
+                                        self.text_sources['rhyme'][rhyme].append(text)
 
                                 # Add tone to vocab
+                                tone = tone.lower() if tone else 'none'
                                 if tone not in self.vocab['tone']:
                                     self.vocab['tone'][tone] = len(self.vocab['tone'])
                                     self.word_sources['tone'][tone] = [word]
                                 else:
-                                    self.word_sources['tone'][tone].append(word)
+                                    if tone not in self.word_sources['tone']:
+                                        self.word_sources['tone'][tone] = [word]
+                                    else:
+                                        self.word_sources['tone'][tone].append(word)
                             else:
                                 # Handle non-Vietnamese words by adding each character to onset
-                                for char in word:
-                                    if char not in self.vocab['onset']:
+                                for char in word.lower():
+                                    if char.islower() and char not in self.vocab['onset']:
                                         self.vocab['onset'][char] = len(self.vocab['onset'])
                                         self.word_sources['onset'][char] = [word]
-                                    elif word not in self.word_sources['onset'][char]:
+                                    elif char in self.word_sources['onset'] and word not in self.word_sources['onset'][char]:
                                         self.word_sources['onset'][char].append(word)
+
+                                # Check for missing characters in onset from string.printable
+                                for printable_char in string.ascii_lowercase + string.digits + string.punctuation + ' ' + '<_>':
+                                    if printable_char not in self.vocab['onset']:
+                                        self.vocab['onset'][printable_char] = len(self.vocab['onset'])
+                                        self.word_sources['onset'][printable_char] = []
 
         return self.vocab
 
@@ -98,9 +111,9 @@ class VocabBuilder:
         else:
             print(f"{category.capitalize()} '{key}' not found in vocabulary.")
 
-# Load data from the given dataset directory and create vocab
-dataset_dir = 'dataset'
-vocab_builder = VocabBuilder(dataset_dir)
+# Load data from the given JSON files and create vocab
+annotation_paths = ['openvivqa_dev_v2.json', 'openvivqa_test_v2.json', 'openvivqa_train_v2.json']
+vocab_builder = VocabBuilder(annotation_paths)
 vocab = vocab_builder.vocab
 vocab_builder.check_vocab()
 
