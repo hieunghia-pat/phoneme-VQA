@@ -5,75 +5,276 @@ import torch.nn.functional as F
 import re
 import unicodedata
 import numpy as np
-
+from word_processing import is_Vietnamese
 # Import other components from the project
-from decode.word_processing import is_Vietnamese
 
 class VietnameseTokenizer:
-    def __init__(self, vocab: dict):
-        self.vocab = vocab
+    def __init__(self, vocab_path: str):
+        with open(vocab_path, 'r', encoding='utf-8') as f:
+            self.vocab = json.load(f)
+
+        # Từ điển chứa các dấu đặc biệt, mã Unicode của dấu thanh và vị trí áp dụng
+        self.diacritics = {
+            '<`>': '\u0300',   # Dấu huyền
+            '</>': '\u0301',   # Dấu sắc
+            '<?>' : '\u0309',  # Dấu hỏi
+            '<~>': '\u0303',   # Dấu ngã
+            '<.>': '\u0323',   # Dấu nặng
+        }
+        self.vowel_groups = {
+            # Nguyên âm đôi và ba
+            'ai': 'a',
+            'ao': 'a',
+            'au': 'a',
+            'ay': 'a',
+            'âu': 'â',
+            'ây': 'â',
+            'eo': 'e',
+            'êu': 'ê',
+            'ia': 'a',
+            'iê': 'ê',
+            'ie': 'e',
+            'iu': 'u',
+            'oa': 'a',
+            'oe': 'e',
+            'oi': 'o',
+            'ôi': 'ô',
+            'ơi': 'ơ',
+            'oo': 'o',
+            'ua': 'u',
+            'uâ': 'â',
+            'uê': 'ê',
+            'ui': 'u',
+            'uy': 'y',
+            'ưa': 'ư',
+            'ươ': 'ơ',
+            'ưu': 'ư',
+            'ye': 'e',
+            'ya': 'a',
+            'yo': 'o',
+            'yê': 'ê',
+            'yêu': 'ê',
+            'iêu': 'ê',
+            'uai': 'a',
+            'uay': 'a',
+            'uây': 'â',
+            'uôi': 'ô',
+            'ươi': 'ơ',
+            'uyê': 'ê',
+            'uyên': 'ê',
+            'uyê': 'ê',
+            'ươu': 'ơ',
+            'oai': 'a',
+            'oay': 'a',
+            'oeo': 'e',
+        }
 
     def normalize_text(self, text: str) -> str:
-        text = unicodedata.normalize('NFC', text)  # Normalize to composed form
-        text = re.sub(r'[\s]+', ' ', text)  # Replace multiple spaces with a single space
+        text = unicodedata.normalize('NFC', text)  # Chuẩn hóa về dạng NFC
+        text = re.sub(r'[\s]+', ' ', text)  # Thay thế nhiều khoảng trắng bằng một khoảng trắng duy nhất
         return text.strip()
 
-    def split_sentence_to_phonemes(self, sentence: str) -> list[list[int]]:
+    # Hàm xác định vị trí đặt dấu thanh trong âm tiết
+    def find_tone_position(self, syllable):
+        # Chuyển âm tiết sang dạng NFD để phân tách các ký tự tổ hợp
+        syllable_nfd = unicodedata.normalize('NFD', syllable)
+        vowels = 'aăâeêiioôơuưy'
+        letters = []
+        idx_map = []
+
+        idx = 0
+        char_idx = 0  # Chỉ số ký tự trong từ gốc
+        while idx < len(syllable_nfd):
+            c = syllable_nfd[idx]
+            base = c
+            combs = ''
+            idx += 1
+            # Thu thập các dấu kết hợp (diacritics)
+            while idx < len(syllable_nfd) and unicodedata.combining(syllable_nfd[idx]):
+                combs += syllable_nfd[idx]
+                idx += 1
+            # Kết hợp ký tự cơ bản với các dấu
+            letter = unicodedata.normalize('NFC', base + combs)
+            letters.append(letter)
+            # Lưu vị trí của ký tự trong âm tiết gốc
+            idx_map.append(char_idx)
+            char_idx += len(letter)
+
+        # Xử lý trường hợp đặc biệt với "qu"
+        is_qu = False
+        if letters[0].lower() == 'q' and len(letters) > 1 and letters[1].lower() == 'u':
+            is_qu = True
+
+        # Tạo danh sách các chỉ số nguyên âm trong âm tiết
+        vowel_indices = []
+        for i, letter in enumerate(letters):
+            if letter.lower() in vowels:
+                # Loại bỏ chữ "u" trong "qu" khỏi danh sách nguyên âm
+                if is_qu and i == 1 and letters[i].lower() == 'u':
+                    continue
+                vowel_indices.append(i)
+
+        # Tạo chuỗi các nguyên âm trong âm tiết
+        vowel_seq = ''.join([letters[i].lower() for i in vowel_indices])
+
+        # Tìm tổ hợp nguyên âm trong vowel_groups
+        max_length = min(3, len(vowel_seq))
+        for length in range(max_length, 0, -1):  # Kiểm tra các tổ hợp có độ dài từ 3 đến 1
+            for start in range(len(vowel_seq) - length + 1):
+                seq = vowel_seq[start:start+length]
+                if seq in self.vowel_groups:
+                    tone_vowel_char = self.vowel_groups[seq]
+                    # Tìm vị trí của nguyên âm mang dấu trong tổ hợp
+                    for idx in vowel_indices[start:start+length]:
+                        if letters[idx].lower() == tone_vowel_char:
+                            pos = idx_map[idx]
+                            length = len(letters[idx])
+                            return pos, length
+                    # Nếu không tìm thấy nguyên âm chính, đặt vào nguyên âm đầu tiên của tổ hợp
+                    idx = vowel_indices[start]
+                    pos = idx_map[idx]
+                    length = len(letters[idx])
+                    return pos, length
+
+        # Nếu không tìm thấy tổ hợp, áp dụng quy tắc chung
+        priority_vowels = ['ă', 'â', 'ê', 'ô', 'ơ', 'ư']
+        for vowel in priority_vowels:
+            for idx in vowel_indices:
+                if letters[idx].lower() == vowel:
+                    pos = idx_map[idx]
+                    length = len(letters[idx])
+                    return pos, length
+
+        if vowel_indices:
+            # Nếu không có nguyên âm ưu tiên, đặt dấu vào nguyên âm cuối cùng
+            idx = vowel_indices[-1]
+            pos = idx_map[idx]
+            length = len(letters[idx])
+            return pos, length
+
+        # Nếu không tìm thấy nguyên âm, trả về -1
+        return -1, 0
+
+    # Hàm loại bỏ dấu thanh hiện có trong âm tiết
+    def remove_existing_tone(self, syllable):
+        syllable_nfd = unicodedata.normalize('NFD', syllable)
+        tone_marks = ['\u0300', '\u0301', '\u0303', '\u0309', '\u0323']
+        new_syllable_nfd = ''.join([c for c in syllable_nfd if c not in tone_marks])
+        return unicodedata.normalize('NFC', new_syllable_nfd)
+
+    # Hàm áp dụng dấu thanh vào âm tiết
+    def apply_tone(self, syllable, accent):
+        # Loại bỏ dấu thanh hiện có
+        syllable = self.remove_existing_tone(syllable)
+
+        vowel_pos, vowel_len = self.find_tone_position(syllable)
+
+        if vowel_pos == -1:
+            # Không tìm thấy nguyên âm, không áp dụng dấu
+            return syllable
+
+        # Tách nguyên âm cần thêm dấu
+        vowel = syllable[vowel_pos:vowel_pos+vowel_len]
+        # Chuyển sang dạng NFD để xử lý dấu
+        vowel_nfd = unicodedata.normalize('NFD', vowel)
+        base_char = ''
+        diacritics_chars = []
+        for c in vowel_nfd:
+            if not unicodedata.combining(c):
+                base_char += c
+            else:
+                diacritics_chars.append(c)
+        # Thêm dấu thanh mới
+        diacritics_chars.append(accent)
+        # Sắp xếp lại các dấu theo thứ tự chuẩn
+        diacritic_order = ['\u031B', '\u0306', '\u0302', '\u0309', '\u0300', '\u0301', '\u0303', '\u0323']
+        diacritics_chars.sort(key=lambda x: diacritic_order.index(x) if x in diacritic_order else 999)
+        # Tạo nguyên âm mới với dấu thanh
+        new_vowel_nfd = base_char + ''.join(diacritics_chars)
+        # Chuyển về dạng NFC
+        new_vowel = unicodedata.normalize('NFC', new_vowel_nfd)
+        # Thay thế nguyên âm trong âm tiết
+        syllable = syllable[:vowel_pos] + new_vowel + syllable[vowel_pos+vowel_len:]
+
+        return syllable
+
+    # Hàm xử lý văn bản, áp dụng dấu thanh dựa trên các dấu đặc biệt
+    def process_text(self, text):
+        # Tách từ trong câu
+        words = text.split()
+        for idx_w, word in enumerate(words):
+            # Xử lý các dấu đặc biệt trong từ
+            for marker in self.diacritics:
+                while marker in word:
+                    idx = word.find(marker)
+                    accent = self.diacritics[marker]
+                    # Xóa dấu đặc biệt khỏi từ
+                    word = word[:idx] + word[idx+len(marker):]
+                    if word == 'gii':
+                        word = 'gi'
+                    elif word == 'giin':
+                        word = 'gin'
+                    # Áp dụng dấu thanh vào từ
+                    word = self.apply_tone(word, accent)
+            words[idx_w] = word
+        return ' '.join(words)
+
+    def encode(self, sentence: str) -> list[list[int]]:
+        sentence = self.process_text(sentence)  # Process text to apply diacritics
         words = sentence.split()
         phoneme_indices = []
 
         for idx, word in enumerate(words):
-            # Handle punctuation and special characters separately
+            # Xử lý dấu câu và ký tự đặc biệt riêng biệt
             if re.match(r'^[\W_]+$', word):
                 for char in word:
-                    onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['null'])
-                    phoneme_indices.append([onset_idx, self.vocab['rhyme']['null'], self.vocab['tone']['null']])
+                    onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['none'])
+                    phoneme_indices.append([onset_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
                 continue
 
             if word == '<_>':
-                phoneme_indices.append([self.vocab['onset'][' '], self.vocab['rhyme']['null'], self.vocab['tone']['null']])
+                phoneme_indices.append([self.vocab['onset']['none'], self.vocab['rhyme']['none'], self.vocab['tone']['none']])
             else:
                 try:
-                    is_vietnamese, components = is_Vietnamese(word)
-                    if is_vietnamese:
+                    is_vietnamese_word, components = is_Vietnamese(word)
+                    if is_vietnamese_word:
                         onset, rhyme, tone = components
-                        onset_idx = self.vocab['onset'].get(onset, self.vocab['onset']['null'])
-                        rhyme_idx = self.vocab['rhyme'].get(rhyme, self.vocab['rhyme']['null'])
-                        tone_idx = self.vocab['tone'].get(tone, self.vocab['tone']['null'])
+                        onset_idx = self.vocab['onset'].get(onset, self.vocab['onset']['none'])
+                        rhyme_idx = self.vocab['rhyme'].get(rhyme, self.vocab['rhyme']['none'])
+                        tone_idx = self.vocab['tone'].get(tone, self.vocab['tone']['none'])
                         phoneme_indices.append([onset_idx, rhyme_idx, tone_idx])
                     else:
-                        # For non-Vietnamese words, treat each character as onset, with rhyme and tone as 'none'
+                        # Đối với từ không phải tiếng Việt, mỗi ký tự được xem như là onset, với rhyme và tone là 'none'
                         for char in word:
-                            onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['null'])
-                            rhyme_idx = self.vocab['rhyme']['null']
-                            tone_idx = self.vocab['tone']['null']
+                            onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['none'])
+                            rhyme_idx = self.vocab['rhyme']['none']
+                            tone_idx = self.vocab['tone']['none']
                             phoneme_indices.append([onset_idx, rhyme_idx, tone_idx])
                 except Exception as e:
-                    print(f"Error processing word '{word}': {e}")
-                    phoneme_indices.append([self.vocab['onset']['null'], self.vocab['rhyme']['null'], self.vocab['tone']['null']])
+                    print(f"Lỗi khi xử lý từ '{word}': {e}")
+                    phoneme_indices.append([self.vocab['onset']['none'], self.vocab['rhyme']['none'], self.vocab['tone']['none']])
 
-            # Add space between words if not the last word
+            # Thêm khoảng trắng giữa các từ nếu không phải từ cuối
             if idx < len(words) - 1:
-                phoneme_indices.append([self.vocab['onset']['<_>'], self.vocab['rhyme']['null'], self.vocab['tone']['null']])
+                phoneme_indices.append([self.vocab['onset']['<_>'], self.vocab['rhyme']['none'], self.vocab['tone']['none']])
 
         return phoneme_indices
 
-    def tokenize(self, text: str) -> torch.Tensor:
-        text = self.normalize_text(text)
-        phoneme_indices = self.split_sentence_to_phonemes(text)
-        return torch.tensor(phoneme_indices, dtype=torch.long)
+    def encode_multiple(self, sentences: list[str]) -> list[list[list[int]]]:
+        return [self.encode(sentence) for sentence in sentences]
 
-    def detokenize_phonemes(self, phoneme_tensor: torch.Tensor) -> str:
+    def decode(self, phoneme_tensor: torch.Tensor) -> str:
         onset_vocab = self.vocab['onset']
         rhyme_vocab = self.vocab['rhyme']
         tone_vocab = self.vocab['tone']
-        
-        # Reverse vocab dictionaries for easy lookup
+
+        # Đảo ngược từ điển vocab để tra cứu dễ dàng
         rev_onset_vocab = {v: k for k, v in onset_vocab.items()}
         rev_rhyme_vocab = {v: k for k, v in rhyme_vocab.items()}
         rev_tone_vocab = {v: k for k, v in tone_vocab.items()}
 
         sentence = []
+        current_word = ""
         for phoneme in phoneme_tensor:
             try:
                 onset_index, rhyme_index, tone_index = phoneme.tolist()
@@ -81,354 +282,55 @@ class VietnameseTokenizer:
                 rhyme = rev_rhyme_vocab.get(rhyme_index, '')
                 tone = rev_tone_vocab.get(tone_index, '')
 
-                # Construct word from onset, rhyme, and tone
-                if onset == '<_>':
-                    onset = ' '
-                if rhyme == 'null':
+                # Kiểm tra và xử lý giá trị 'none'
+                if onset == 'none':
+                    onset = ''
+                if rhyme == 'none':
                     rhyme = ''
-                if tone == 'null':
+                if tone == 'none':
                     tone = ''
+
+                if onset == '<_>':
+                    if current_word:
+                        sentence.append(current_word)
+                        current_word = ""
+                    continue
 
                 word = onset + rhyme
 
-                # Place tone mark correctly on the vowel
+                # Đặt dấu thanh đúng vị trí trên nguyên âm
                 if tone:
-                    decomposed = unicodedata.normalize('NFD', word)
-                    vowels = 'aeiouyăâêôơư'
-                    vowel_found = False
-                    for i, char in enumerate(decomposed):
-                        if char in vowels:  # Apply tone mark to the first vowel found
-                            decomposed = decomposed[:i + 1] + tone + decomposed[i + 1:]
-                            vowel_found = True
-                            break
-                    if not vowel_found:
-                        decomposed += tone  # If no vowel found, append the tone mark
-                    word = unicodedata.normalize('NFC', decomposed)
-                
-                sentence.append(word)
+                    word = self.apply_tone(word, tone)
+
+                current_word += word
             except Exception as e:
-                print(f"Error processing phoneme '{phoneme}': {e}")
-                sentence.append('')
-        
-        return ' '.join(sentence).strip()
+                print(f"Lỗi khi xử lý phoneme '{phoneme}': {e}")
+                if current_word:
+                    sentence.append(current_word)
+                    current_word = ""
 
+        if current_word:
+            sentence.append(current_word)
 
-# Example test
-if __name__ == "__main__":
-    vocab = {
-        "onset": {
-            " ": 0,
-            "ng": 1,
-            "d": 2,
-            "kh": 3,
-            "đ": 4,
-            "t": 5,
-            "q": 6,
-            "b": 7,
-            "nh": 8,
-            "?": 9,
-            "1": 10,
-            "0": 11,
-            "ch": 12,
-            "n": 13,
-            "null": 14,
-            "ph": 15,
-            "th": 16,
-            "x": 17,
-            "tr": 18,
-            "gi": 19,
-            "l": 20,
-            "c": 21,
-            "m": 22,
-            "ý": 23,
-            "-": 24,
-            "á": 25,
-            "s": 26,
-            "v": 27,
-            "o": 28,
-            "a": 29,
-            "g": 30,
-            "e": 31,
-            "i": 32,
-            "ệ": 33,
-            "p": 34,
-            "y": 35,
-            "h": 36,
-            "9": 37,
-            "7": 38,
-            "5": 39,
-            "2": 40,
-            "3": 41,
-            "4": 42,
-            "ngh": 43,
-            "r": 44,
-            ",": 45,
-            "8": 46,
-            "6": 47,
-            "k": 48,
-            "/": 49,
-            "w": 50,
-            ".": 51,
-            "u": 52,
-            "\"": 53,
-            "ắ": 54,
-            "ề": 55,
-            "f": 56,
-            "z": 57,
-            "â": 58,
-            "ọ": 59,
-            "gh": 60,
-            "%": 61,
-            "à": 62,
-            ":": 63,
-            "@": 64,
-            "(": 65,
-            ")": 66,
-            "ứ": 67,
-            "&": 68,
-            "ỹ": 69,
-            "ố": 70,
-            "ỗ": 71,
-            "ế": 72,
-            "+": 73,
-            ";": 74,
-            "ó": 75,
-            "!": 76,
-            "ô": 77,
-            "ạ": 78,
-            "ì": 79,
-            "ê": 80,
-            "ư": 81,
-            "ơ": 82,
-            "ầ": 83,
-            "ò": 84,
-            "ồ": 85,
-            "ỉ": 86,
-            "'": 87,
-            "ừ": 88,
-            "ả": 89,
-            "j": 90,
-            "=": 91,
-            "é": 92,
-            "ờ": 93,
-            "ụ": 94,
-            "ậ": 95,
-            "ờ": 96,
-            "ở": 97,
-            "ợ": 98,
-            ">": 99,
-            "ồ": 100,
-            "ú": 101,
-            "́": 102,
-            "ở": 103,
-            "ị": 104,
-            "ộ": 105,
-            "è": 106,
-            "^": 107,
-            "ã": 108,
-            "ù": 109,
-            "ă": 110,
-            "ặ": 111,
-            "ễ": 112,
-            "í": 113,
-            "ẩ": 114,
-            "ấ": 115,
-            "ủ": 116,
-            "ủ": 117,
-            "ĩ": 118,
-            "ị": 119,
-            "ỏ": 120,
-            "ẻ": 121,
-            "ũ": 122,
-            "[": 123,
-            "]": 124,
-            "ể": 125,
-            "ở": 126,
-            "ỳ": 127,
-            "`": 128,
-            "õ": 129,
-            "<_>": 130
-        },
-        "rhyme": {
-            "null": 0,
-            "ưoi": 1,
-            "ân": 2,
-            "ông": 3,
-            "uưc": 4,
-            "u": 5,
-            "âp": 6,
-            "ua": 7,
-            "ao": 8,
-            "iêu": 9,
-            "ơ": 10,
-            "ay": 11,
-            "ương": 12,
-            "anh": 13,
-            "uân": 14,
-            "ung": 15,
-            "ây": 16,
-            "ang": 17,
-            "i": 18,
-            "inh": 19,
-            "ong": 20,
-            "ư": 21,
-            "ô": 22,
-            "uy": 23,
-            "an": 24,
-            "o": 25,
-            "au": 26,
-            "ai": 27,
-            "uyên": 28,
-            "am": 29,
-            "ê": 30,
-            "iêp": 31,
-            "uc": 32,
-            "ên": 33,
-            "a": 34,
-            "oa": 35,
-            "iên": 36,
-            "oai": 37,
-            "ênh": 38,
-            "ưa": 39,
-            "at": 40,
-            "ăt": 41,
-            "âm": 42,
-            "ôi": 43,
-            "up": 44,
-            "âu": 45,
-            "ơi": 46,
-            "ăp": 47,
-            "e": 48,
-            "oăc": 49,
-            "ăng": 50,
-            "oanh": 51,
-            "y": 52,
-            "ia": 53,
-            "ich": 54,
-            "ơn": 55,
-            "oc": 56,
-            "uôc": 57,
-            "ât": 58,
-            "ep": 59,
-            "ưc": 60,
-            "uan": 61,
-            "on": 62,
-            "oe": 63,
-            "ôc": 64,
-            "uât": 65,
-            "oi": 66,
-            "ăc": 67,
-            "uôn": 68,
-            "yêu": 69,
-            "êu": 70,
-            "ưng": 71,
-            "ăm": 72,
-            "ăn": 73,
-            "uang": 74,
-            "om": 75,
-            "ac": 76,
-            "iêm": 77,
-            "ơt": 78,
-            "ui": 79,
-            "ach": 80,
-            "âng": 81,
-            "ôt": 82,
-            "êt": 83,
-            "ap": 84,
-            "im": 85,
-            "in": 86,
-            "it": 87,
-            "uynh": 88,
-            "ơm": 89,
-            "ut": 90,
-            "ưu": 91,
-            "iêt": 92,
-            "em": 93,
-            "uôi": 94,
-            "oach": 95,
-            "eo": 96,
-            "iêc": 97,
-            "yên": 98,
-            "oat": 99,
-            "uây": 100,
-            "un": 101,
-            "êm": 102,
-            "iêng": 103,
-            "ôn": 104,
-            "oan": 105,
-            "ưu": 106,
-            "en": 107,
-            "op": 108,
-            "uê": 109,
-            "êch": 110,
-            "oang": 111,
-            "uyết": 112,
-            "ôm": 113,
-            "ip": 114,
-            "îp": 115,
-            "ưt": 116,
-            "yết": 117,
-            "et": 118,
-            "ươn": 119,
-            "uai": 120,
-            "ưi": 121,
-            "ueo": 122,
-            "uưng": 123,
-            "ôp": 124,
-            "iu": 125,
-            "uơm": 126,
-            "ơp": 127,
-            "ươp": 128,
-            "uat": 129,
-            "âc": 130,
-            "uôt": 131,
-            "uăng": 132,
-            "ươt": 133,
-            "uanh": 134,
-            "um": 135,
-            "uyt": 136,
-            "oac": 137,
-            "ươm": 138,
-            "uay": 139,
-            "ot": 140,
-            "ue": 141,
-            "oăn": 142,
-            "ym": 143,
-            "uet": 144,
-            "uăc": 145,
-            "eu": 146,
-            "yêm": 147,
-            "oay": 148,
-            "uơi": 149,
-            "uen": 150,
-            "oong": 151,
-            "eng": 152,
-            "uao": 153,
-            "uyu": 154,
-            "yu": 155,
-            "ou": 156,
-            "oen": 157,
-            "ư": 158
-        },
-        "tone": {
-            "<`>": 0,
-            "null": 1,
-            "<.>": 2,
-            "</>": 3,
-            "<?>": 4,
-            "<~>": 5
-        }
-    }
-    tokenizer = VietnameseTokenizer(vocab)
-    sentence = "con mèo test"
-    phoneme_indices = tokenizer.split_sentence_to_phonemes(sentence)
-    for idx, phoneme in enumerate(phoneme_indices):
-        print(f"Phoneme {idx + 1}: {phoneme}")
+        return self.process_text(' '.join(sentence).strip())
 
-    # Tokenize the sentence to tensor
-    phoneme_tensor = tokenizer.tokenize(sentence)
-    print("Phoneme tensor:", phoneme_tensor)
+    def decode_multiple(self, phoneme_tensors: list[torch.Tensor]) -> list[str]:
+        return [self.decode(phoneme_tensor) for phoneme_tensor in phoneme_tensors]
 
-    # Detokenize the tensor back to sentence
-    detokenized_sentence = tokenizer.detokenize_phonemes(phoneme_tensor)
-    print("Detokenized sentence:", detokenized_sentence)
+    def __call__(self, sentences):
+        """
+        Process input sentences by encoding and then decoding them.
+        If 'sentences' is a list, it uses encode_multiple and decode_multiple.
+        If 'sentences' is a single string, it uses encode and decode.
+        Returns a tuple of (encoded, decoded) results.
+        """
+        if isinstance(sentences, list):
+            # If input is a list of sentences, use encode_multiple and decode_multiple
+            encoded = self.encode_multiple(sentences)
+            # Convert each list of phoneme indices to a torch.Tensor for decoding
+            decoded = self.decode_multiple([torch.tensor(e) for e in encoded])
+        else:
+            # If input is a single sentence, use encode and decode
+            encoded = self.encode(sentences)
+            decoded = self.decode(torch.tensor(encoded))
+        return encoded, decoded
