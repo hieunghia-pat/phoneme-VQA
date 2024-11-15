@@ -5,7 +5,7 @@ import torch
 import os
 import numpy as np
 import pandas as pd
-from vietnamese_tokenizer import VietnameseTokenizer
+from core.tokenizer.vietnamese_tokenizer import VietnameseTokenizer
 
 
 log = get_logger(__name__)
