@@ -5,7 +5,7 @@ import torch
 import os
 import numpy as np
 import pandas as pd
-from core.tokenizer.vietnamese_tokenizer import VietnameseTokenizer
+
 
 
 log = get_logger(__name__)
@@ -26,9 +26,8 @@ class VN_LaTrDataset(BaseDataset):
                 eos_token_box=[1000, 1000, 1000, 1000, 1000, 1000]):
         super().__init__(qa_df, ocr_df, tokenizer, max_input_length, max_output_length, truncation)
 
-        vocab_path = 'vocab.json'
-        annotation_paths = ['openvivqa_dev_v2.json', 'openvivqa_test_v2.json', 'openvivqa_train_v2.json']
-        self.decode_tokenizer = VietnameseTokenizer(vocab_path=vocab_path, annotation_paths=annotation_paths)
+        
+        self.decode_tokenizer=tokenizer
 
         self.base_img_path = base_img_path
         self.max_ocr_length = max_ocr_length
@@ -41,7 +40,6 @@ class VN_LaTrDataset(BaseDataset):
         self.data_processing(dataframe)
 
     def __getitem__(self, index):
-        
         img_path = os.path.join(self.base_img_path, str(self.data['image_id'][index])+'.npy')
 
         with open(img_path, "rb") as f:
@@ -85,7 +83,7 @@ class VN_LaTrDataset(BaseDataset):
         for i in range(len(dataframe)):
             input_ids, tokenized_ocr, coordinates, src_attention_mask, ocr_attention_mask = self.create_properties(dataframe['question'][i], dataframe['texts'][i], dataframe['bboxes'][i])
 
-            answer_encoding = self.decode_tokenizer.encode_multiple(dataframe['answer'][i].strip())
+            answer_encoding = self.decode_tokenizer(dataframe['answer'][i].strip())
 
             self.data['label_ids'].append(answer_encoding)
 
