@@ -1,7 +1,7 @@
 import torch
 from torch import nn, Tensor
 import math
-from embedding import PhonemeEmbedding 
+import json
 
 class SinusoidalPositionalEncoding(nn.Module):
     def __init__(self,
@@ -24,20 +24,43 @@ class SinusoidalPositionalEncoding(nn.Module):
 
         return self.dropout(token_embedding + self.pos_embedding[:, :token_embedding.size(1)])
 
-# Thay thế TokenEmbedding bằng PhonemeEmbedding
-class VN_Embedding(nn.Module):
-    def __init__(self,
-                 vocab_file: str,
-                 embedding_dim: int,
-                 dropout_rate: float = 0.1):
-        super(VN_Embedding, self).__init__()
-        self.phoneme_embedding = PhonemeEmbedding(vocab_file, embedding_dim, dropout_rate)
+class PhonemeEmbedding(nn.Module):
+    def __init__(self, vocab_file, embedding_dim=256, dropout_rate=0):
+        super(PhonemeEmbedding, self).__init__()
+        with open(vocab_file, 'r', encoding='utf-8') as f:
+            self.phonemes = json.load(f)
 
-    def forward(self, phoneme_matrices):
-        # Lấy sentence_embeddings từ PhonemeEmbedding
-        sentence_embeddings = self.phoneme_embedding(phoneme_matrices)
-        # Chúng ta có thể cần nhân với căn bậc hai của embedding_dim nếu cần thiết
-        return sentence_embeddings 
+        self.embedding_dim = embedding_dim
+        self.dropout_rate = dropout_rate
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.init_embeddings()
+        self.dropout = nn.Dropout(p=self.dropout_rate)
+
+    def init_embeddings(self):
+        # Create embeddings for each type of phoneme: onset, rhyme, tone
+        self.onset_embedding = nn.Embedding(len(self.phonemes['onset']), self.embedding_dim).to(self.device)
+        self.rhyme_embedding = nn.Embedding(len(self.phonemes['rhyme']), self.embedding_dim).to(self.device)
+        self.tone_embedding = nn.Embedding(len(self.phonemes['tone']), self.embedding_dim).to(self.device)
+
+
+    def forward(self, phoneme_tensor):
+        onset_indices = phoneme_tensor[:, :, 0]
+        rhyme_indices = phoneme_tensor[:, :, 1]
+        tone_indices = phoneme_tensor[:, :, 2]
+
+        onset_emb = self.onset_embedding(onset_indices.to(self.device))
+        rhyme_emb = self.rhyme_embedding(rhyme_indices.to(self.device))
+        tone_emb = self.tone_embedding(tone_indices.to(self.device))
+
+        # Kết hợp các embeddings để tạo thành embedding cho từ
+        word_embeddings = torch.cat((onset_emb, rhyme_emb, tone_emb), dim=-1)
+
+        # Áp dụng dropout
+        word_embeddings = self.dropout(word_embeddings)
+
+        # Trả về embedding cuối cùng
+        return word_embeddings
 
 class BaseDecoder(nn.Module):
     def __init__(self, 
