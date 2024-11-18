@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.data import textlayout_ocr_adapt, CustomizedPreSTUDataset
-from core.tokenizer import *
+from core.data import textlayout_ocr_adapt, PhonemeLaTrDataset
+from core.tokenizer import PhonemeTokenizer
 
 from timeit import default_timer as timer
 
@@ -23,7 +23,7 @@ import itertools
 log = get_logger(__name__)
 
 
-class CustomizedPreSTU_Executor(Base_Executor):
+class PhonemeLaTr_Executor(Base_Executor):
     def __init__(self, config, mode = 'train', evaltype='last', predicttype='best'):
         super().__init__(config, mode, evaltype, predicttype)
         log.info("---Initializing Executor---")
@@ -36,12 +36,18 @@ class CustomizedPreSTU_Executor(Base_Executor):
         with torch.no_grad():
             for it, batch in enumerate(dataloader):
                 pixel_values = batch['pixel_values'].to(self.config.DEVICE)
+                coordinates = batch['coordinates'].to(self.config.DEVICE)
                 input_ids = batch['input_ids'].to(self.config.DEVICE)
                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE)
+                ocr_attention_mask = batch['ocr_attention_mask'].to(self.config.DEVICE)
+                tokenized_ocr = batch['tokenized_ocr'].to(self.config.DEVICE)
 
                 pred = self.model.generate( pixel_values,
+                                            coordinates,
                                             input_ids,
                                             src_attention_mask,
+                                            ocr_attention_mask,
+                                            tokenized_ocr,
                                             max_length = max_length,
                                             start_symbol = self.decode_tokenizer.bos_id,
                                             end_symbol = self.decode_tokenizer.eos_id,
@@ -61,13 +67,13 @@ class CustomizedPreSTU_Executor(Base_Executor):
         val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         self.val_answer = list(val_qa_df["answer"])
 
-        self._create_decode_tokenizer([train_qa_df, val_qa_df])
+        self._create_decode_tokenizer()
 
         ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
 
         log.info("# Creating Datasets")
         
-        self.train_data = CustomizedPreSTUDataset(base_img_path = self.config.base_img_path,
+        self.train_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
                                         qa_df = train_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
@@ -78,7 +84,7 @@ class CustomizedPreSTU_Executor(Base_Executor):
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
 
-        self.val_data = CustomizedPreSTUDataset(base_img_path = self.config.base_img_path,
+        self.val_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
                                         qa_df = val_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
@@ -99,7 +105,7 @@ class CustomizedPreSTU_Executor(Base_Executor):
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
 
-            self.val_data = CustomizedPreSTUDataset(base_img_path = self.config.base_img_path,
+            self.val_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
                                             qa_df = val_qa_df,
                                             ocr_df = ocr_df,
                                             tokenizer = self.tokenizer,
@@ -120,7 +126,7 @@ class CustomizedPreSTU_Executor(Base_Executor):
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
 
-            self.predict_data = CustomizedPreSTUDataset(base_img_path = self.config.base_img_path,
+            self.predict_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
                                                 qa_df = predict_qa_df,
                                                 ocr_df = ocr_df,
                                                 tokenizer = self.tokenizer,
@@ -160,18 +166,29 @@ class CustomizedPreSTU_Executor(Base_Executor):
             trg_input = labels[:, :-1]
             label_attention_mask = label_attention_mask[:, :-1]
 
-            logits = self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                labels = trg_input,
-                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                label_attention_mask = label_attention_mask,)
+            onset_logits, rhyme_logits, tone_logits= self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
+                                                                coordinates = batch['coordinates'].to(self.config.DEVICE),
+                                                                input_ids = batch['input_ids'].to(self.config.DEVICE),
+                                                                labels = trg_input,
+                                                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
+                                                                label_attention_mask = label_attention_mask,
+                                                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
+                                                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE))
 
 
             self.optim.zero_grad()
 
-            trg_out = labels[:, 1:]
+            onset_tgt_out = labels[:, 1:, 0]
+            rhyme_tgt_out = labels[:, 1:, 1]
+            tone_tgt_out = labels[:, 1:, 2]
 
-            loss = self.loss_fn(logits.reshape(-1, logits.shape[-1]), trg_out.reshape(-1))
+
+            onset_loss = self.loss_fn(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
+            rhyme_loss = self.loss_fn(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
+            tone_loss = self.loss_fn(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
+            
+            loss = onset_loss + rhyme_loss + tone_loss
+
             loss.backward()
 
             self.optim.step()
@@ -198,16 +215,29 @@ class CustomizedPreSTU_Executor(Base_Executor):
                 trg_input = labels[:, :-1]
                 label_attention_mask = label_attention_mask[:, :-1]
 
-                logits = self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                    input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                    labels = trg_input,
-                                    src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                    label_attention_mask = label_attention_mask,)
+                onset_logits, rhyme_logits, tone_logits= self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
+                                                                coordinates = batch['coordinates'].to(self.config.DEVICE),
+                                                                input_ids = batch['input_ids'].to(self.config.DEVICE),
+                                                                labels = trg_input,
+                                                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
+                                                                label_attention_mask = label_attention_mask,
+                                                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
+                                                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE))
 
 
-                trg_out = labels[:, 1:]
+                self.optim.zero_grad()
 
-                loss = self.loss_fn(logits.reshape(-1, logits.shape[-1]), trg_out.reshape(-1))
+                onset_tgt_out = labels[:, 1:, 0]
+                rhyme_tgt_out = labels[:, 1:, 1]
+                tone_tgt_out = labels[:, 1:, 2]
+
+
+                onset_loss = self.loss_fn(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
+                rhyme_loss = self.loss_fn(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
+                tone_loss = self.loss_fn(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
+                
+                loss = onset_loss + rhyme_loss + tone_loss
+
                 losses += loss.data.item()
 
                 if it+1 == 1 or (it+1) % 20 == 0 or it+1==self.valiter_length:
@@ -224,26 +254,15 @@ class CustomizedPreSTU_Executor(Base_Executor):
         else:
             self.model_config = AutoConfig.from_pretrained(self.config.backbone_name)
 
-        self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config, tgt_vocab_size=len(self.decode_tokenizer))
+        self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config, 
+                                                                self.onset_vocab_size,
+                                                                self.rhyme_vocab_size,
+                                                                self.tone_vocab_size)
         self.model = self.model.to(self.config.DEVICE)
     
-    def _create_decode_tokenizer(self, frames=None):
-        if "BPE" in self.config.DecodeTokenizer:
-            if frames:
-                data = self._prepare_bpe_frames(frames)
-            else:
-                data = None
-            
-            self.decode_tokenizer = self.build_class(self.config.DecodeTokenizer)(data, 
-                                                                                    self.config.bpe_step, 
-                                                                                    self.config.vocab_save_path, 
-                                                                                    self.config.max_vocab_size)
-
-        else:
-            self.decode_tokenizer = self.build_class(self.config.DecodeTokenizer)()
-
-    def _prepare_bpe_frames(self, frames):
-        data = []
-        for f in frames:
-            data += f["answer"].tolist()
-        return data
+    def _create_decode_tokenizer(self):
+        self.decode_tokenizer = PhonemeTokenizer(vocab_path=self.config.vocab_path,
+                                                annotation_paths=self.config.annotation_paths)
+        self.onset_vocab_size = len(self.decode_tokenizer.vocab['onset'])
+        self.rhyme_vocab_size = len(self.decode_tokenizer.vocab['rhyme'])
+        self.tone_vocab_size = len(self.decode_tokenizer.vocab['tone'])

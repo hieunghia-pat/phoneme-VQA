@@ -6,3 +6,5 @@ from .utils import textlayout_ocr_adapt, textlayout_obj_adapt
 from .CustomizedLaTrDataset import CustomizedLaTrDataset
 from .CustomizedPreSTUDataset import CustomizedPreSTUDataset
 from .CustomizedSaLDataset import CustomizedSaLDataset
+
+from .PhonemeLaTrDataset import PhonemeLaTrDataset

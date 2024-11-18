@@ -64,7 +64,7 @@ class CustomizedSaL_Executor(Base_Executor):
                                             isgreedy = self.config.isgreedy,
                                             num_beam = self.config.num_beam)
 
-                decoded_preds += self.tokenizer.batch_decode(pred.tolist())
+                decoded_preds += self.decode_tokenizer.batch_decode(pred.tolist())
 
                 log.info(f"|===| Inferring... {it+1} it |===|")
 
@@ -95,7 +95,7 @@ class CustomizedSaL_Executor(Base_Executor):
         ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)
         obj_df = textlayout_obj_adapt(self.config.base_obj_feature_path, h_scale=1, w_scale=1)
 
-        print("# Creating Datasets")
+        log.info("# Creating Datasets")
         
         self.train_data = CustomizedSaLDataset(   qa_df = train_qa_df,
                                         ocr_df = ocr_df,
@@ -138,7 +138,7 @@ class CustomizedSaL_Executor(Base_Executor):
         self._create_decode_tokenizer()
 
         if self.mode == "eval":
-            print("###Load eval data ...")
+            log.info("###Load eval data ...")
             val_qa_df = pd.read_csv(self.config.qa_val_path)[["image_id", "question", "answer", "filename"]]
         
             ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)
@@ -166,7 +166,7 @@ class CustomizedSaL_Executor(Base_Executor):
                                     batch_size=self.config.EVAL_BATCH_SIZE)
             self.valiter_length = math.ceil(len(self.val_data)/self.config.EVAL_BATCH_SIZE)
         elif self.mode == "predict":
-            print("###Load predict data ...")
+            log.info("###Load predict data ...")
             predict_qa_df = pd.read_csv(self.config.qa_predict_path)[["image_id", "question", "answer", "filename"]]
         
             ocr_df = textlayout_ocr_adapt(self.config.base_ocr_feature_path, h_scale=1, w_scale=1)

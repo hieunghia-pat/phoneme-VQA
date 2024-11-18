@@ -5,3 +5,5 @@ from .SaL_Executor import SaL_Executor
 from .CustomizedLaTr_Executor import CustomizedLaTr_Executor
 from .CustomizedPreSTU_Executor import CustomizedPreSTU_Executor
 from .CustomizedSaL_Executor import CustomizedSaL_Executor
+
+from .PhonemeLaTr_Executor import PhonemeLaTr_Executor

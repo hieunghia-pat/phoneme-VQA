@@ -11,3 +11,5 @@ from .transformer_utils import (
     TokenEmbedding,
     BaseDecoder
 ) 
+
+from .phoneme_utils import PhonemeEmbedding

@@ -5,12 +5,12 @@ import torch.nn.functional as F
 import re
 import unicodedata
 import numpy as np
-from word_processing import is_Vietnamese
-from vocab_builder import VocabBuilder
+from .modules import is_Vietnamese
+from .modules import VocabBuilder
 import os
 
 
-class VietnameseTokenizer:
+class PhonemeTokenizer:
     def __init__(self, vocab_path: str = None, annotation_paths: list[str] = None):
         if vocab_path and os.path.exists(vocab_path):
             with open(vocab_path, 'r', encoding='utf-8') as f:
@@ -354,29 +354,3 @@ class VietnameseTokenizer:
             else:
                 mask.append(0)
         return mask
-
-if __name__ == "__main__":
-    vocab_path = 'vocab.json'
-    annotation_paths = ['openvivqa_dev_v2.json', 'openvivqa_test_v2.json', 'openvivqa_train_v2.json']
-
-    tokenizer = VietnameseTokenizer(vocab_path=vocab_path, annotation_paths=annotation_paths)
-
-    sentences = ["hello"]
-    max_length = 8
-
-    # Sử dụng phương thức __call__ để mã hóa
-    phoneme_indices_list = tokenizer(sentences, max_length=max_length)
-
-    for i, phoneme_indices in enumerate(phoneme_indices_list):
-        print(f"Sentence {i + 1}:")
-        for idx, phoneme in enumerate(phoneme_indices):
-            print(f"  Matrix {idx + 1}: {phoneme}")
-
-    phoneme_matrices = [phoneme_matrix for phoneme_matrix in phoneme_indices_list]
-    detokenized_sentences = tokenizer.batch_decode(phoneme_matrices)
-    for i, detokenized_sentence in enumerate(detokenized_sentences):
-        print(f"Decoded sentence {i + 1}: '{detokenized_sentence}'")
-
-    for i, phoneme_indices in enumerate(phoneme_indices_list):
-        mask = tokenizer.create_mask(phoneme_indices)
-        print(f"Mask for sentence {i + 1}: {mask}")
