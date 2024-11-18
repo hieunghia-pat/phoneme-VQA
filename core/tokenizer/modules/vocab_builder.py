@@ -6,15 +6,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import string
-from word_processing import is_Vietnamese
+from .word_processing import is_Vietnamese
 
 class VocabBuilder:
     def __init__(self, annotation_paths: list[str]):
         self.annotation_paths = annotation_paths
-        self.vocab = {'onset': {'none': 0, ' ': 1, '<_>': 2}, 'rhyme': {'none': 0}, 'tone': {'none': 0},'none':{'none': 0}}
+        self.vocab = {'onset': {'none': 0, ' ': 1, '<_>': 2, '<pad>':5, '<bos>':3, '<eos>':4}, 'rhyme': {'none': 0}, 'tone': {'none': 0},'none':{'none': 0}}
         self.word_sources = {'onset': {}, 'rhyme': {}, 'tone': {}}
         self.text_sources = {'rhyme': {}}
-        self.word_counts = self.create_vocab()
+        self.create_vocab()
 
     def create_vocab(self) -> dict[str, int]:
         for annotation_path in self.annotation_paths:
@@ -24,8 +24,8 @@ class VocabBuilder:
             annotations = json_data.get("annotations", [])
 
             for ann in annotations:
-                # Collect words from questions and answers
-                for field in ["question", "answers"]:
+                # Collect words from answers
+                for field in ["answers"]:
                     if field in ann:
                         text = ann[field] if isinstance(ann[field], str) else ann[field][0]
                         for word in text.split():
@@ -87,7 +87,6 @@ class VocabBuilder:
                                         self.vocab['onset'][printable_char] = len(self.vocab['onset'])
                                         self.word_sources['onset'][printable_char] = []
 
-        return self.vocab
 
     def check_vocab(self):
         # Print the vocabulary and its size
@@ -111,11 +110,3 @@ class VocabBuilder:
         else:
             print(f"{category.capitalize()} '{key}' not found in vocabulary.")
 
-# Load data from the given JSON files and create vocab
-annotation_paths = ['openvivqa_dev_v2.json', 'openvivqa_test_v2.json', 'openvivqa_train_v2.json']
-vocab_builder = VocabBuilder(annotation_paths)
-vocab = vocab_builder.vocab
-vocab_builder.check_vocab()
-
-# Save the vocabulary to a file
-vocab_builder.save_vocab('vocab.json')

@@ -1,10 +1,10 @@
-EXECUTOR: "CustomizedLaTr_Executor"
+EXECUTOR: "PhonemeLaTr_Executor"
 
 ## Tokenizer
 
-vocab_path: "PhonoVQA/models/phonemevocab.json"
+vocab_path: "PhonoVQA/phoneme_vocab.json"
 annotation_paths:
-  - "ViTextVQA_train.json"
+  - "/content/ViTextVQA_train.json"
 
 ## Training param
 DEVICE: "cuda"
@@ -47,7 +47,7 @@ qa_predict_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
 NUMWORKERS: 2
 
 ## MODEL
-MODEL_CLASS: "CustomizedLaTr"
+MODEL_CLASS: "PhonemeLaTr"
 
 MODEL_MOD_CONFIG_CLASS: "CustomizedLaTr_config" # model modified config class
 

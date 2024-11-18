@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import T5EncoderModel, ViTModel, AutoConfig
-from modules import SinusoidalPositionalEncoding, PhonemeEmbedding, BaseDecoder
+from .modules import SinusoidalPositionalEncoding, PhonemeEmbedding, BaseDecoder
 
 class CustomizedLaTr_config:
     def build(self, config):

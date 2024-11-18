@@ -19,9 +19,7 @@ class PhonemeEmbedding(nn.Module):
         self.onset_embedding = nn.Embedding(onset_vocab_size, onset_embed_dim)
         self.rhyme_embedding = nn.Embedding(rhyme_vocab_size, rhyme_tone_embed_dim)
         self.tone_embedding = nn.Embedding(tone_vocab_size, rhyme_tone_embed_dim)
-
-        self.dropout = nn.Dropout(p=self.dropout_rate)
-       
+      
 
     def forward(self, phoneme_tensor):
         onset_indices = phoneme_tensor[:, :, 0]

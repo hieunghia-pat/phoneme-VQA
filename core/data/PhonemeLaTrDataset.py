@@ -1,5 +1,5 @@
 from typing_extensions import override
-from base_dataset import BaseDataset
+from .base_dataset import BaseDataset
 from logger.logger import get_logger
 import torch
 import os
@@ -50,12 +50,12 @@ class PhonemeLaTrDataset(BaseDataset):
         return {
             'input_ids': torch.tensor([self.data['input_ids'][index]], dtype=torch.int64).squeeze(0),
             'coordinates': torch.tensor([self.data['coordinates'][index]], dtype=torch.int64).squeeze(0),
-            'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.int64).squeeze(0),
+            'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'label_ids': label_ids,
-            'label_attention_mask': torch.tensor(label_attention_mask, dtype=torch.int64).squeeze(0),
+            'label_attention_mask': torch.tensor(label_attention_mask, dtype=torch.float).squeeze(0),
             'pixel_values': img.squeeze(0),
             'tokenized_ocr': torch.tensor([self.data['tokenized_ocr'][index]], dtype=torch.int64).squeeze(0),
-            'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.int64).squeeze(0),
+            'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.float).squeeze(0),
         }
 
     @override

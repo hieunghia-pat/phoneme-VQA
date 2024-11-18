@@ -238,6 +238,26 @@ class CustomizedLaTr_Executor(Base_Executor):
         self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config, tgt_vocab_size=len(self.decode_tokenizer))
         self.model = self.model.to(self.config.DEVICE)
     
+    @override
+    def _init_training_properties(self):
+        self.optim = torch.optim.Adam(self.model.parameters(), lr=self.config.LR, betas=self.config.BETAS, eps=1e-9)
+        self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
+        self.scheduler = torch.optim.lr_scheduler.LinearLR(optimizer = self.optim, total_iters = self.config.warmup_step)
+
+        self.SAVE = self.config.SAVE
+
+        if os.path.isfile(os.path.join(self.config.SAVE_PATH, "last_ckp.pth")):
+            log.info("###Load trained checkpoint ...")
+            ckp = torch.load(os.path.join(self.config.SAVE_PATH, "last_ckp.pth"))
+            try:
+                log.info(f"\t- Last train epoch: {ckp['epoch']}")
+            except:
+                log.info(f"\t- Last train step: {ckp['step']}")
+            self.model.load_state_dict(ckp['state_dict'])
+            self.optim.load_state_dict(ckp['optimizer'])
+            self.scheduler.load_state_dict(ckp['scheduler'])
+            self.best_score = ckp['best_score']
+    
     def _create_decode_tokenizer(self, frames=None):
         if "BPE" in self.config.DecodeTokenizer:
             if frames:
