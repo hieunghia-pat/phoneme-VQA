@@ -147,6 +147,15 @@ class CustomizedLaTr_Executor(Base_Executor):
     def _train_epoch(self, epoch):
         self.model.train()
         losses = 0
+
+        if epoch < self.config.NUM_FREEZE_EPOCH:
+            for child in self.model.encoder.children():
+                for param in child.parameters():
+                    param.requires_grad = False
+        else:
+            for child in self.model.encoder.children():
+                for param in child.parameters():
+                    param.requires_grad = True
         
         for it, batch in enumerate(self.trainiter):
             label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)
