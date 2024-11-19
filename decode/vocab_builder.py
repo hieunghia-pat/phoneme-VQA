@@ -11,7 +11,7 @@ from word_processing import is_Vietnamese
 class VocabBuilder:
     def __init__(self, annotation_paths: list[str]):
         self.annotation_paths = annotation_paths
-        self.vocab = {'onset': {'none': 0, ' ': 1, '<_>': 2}, 'rhyme': {'none': 0}, 'tone': {'none': 0},'none':{'none': 0}}
+        self.vocab = {'onset': {'none': 0, '<_>': 1}, 'rhyme': {'none': 0}, 'tone': {'none': 0},'none':{'none': 0}}
         self.word_sources = {'onset': {}, 'rhyme': {}, 'tone': {}}
         self.text_sources = {'rhyme': {}}
         self.word_counts = self.create_vocab()

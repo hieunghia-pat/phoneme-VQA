@@ -312,12 +312,6 @@ class PhonemeTokenizer:
                     sentence.append(' ')
                     continue
 
-                if onset == ' ':
-                    if current_word:
-                        sentence.append(current_word)
-                        current_word = ""
-                    sentence.append(' ')
-                    continue
 
                 word = onset + rhyme
 
