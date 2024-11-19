@@ -149,7 +149,7 @@ class PhonemeLaTr_Executor(Base_Executor):
         self.model.train()
         losses = 0
 
-        if epoch < self.config.NUM_FREEZE_EPOCH:
+        if epoch <= self.config.NUM_FREEZE_EPOCH:
             for child in self.model.encoder.children():
                 for param in child.parameters():
                     param.requires_grad = False
