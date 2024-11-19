@@ -1,0 +1,70 @@
+EXECUTOR: "PhonemePreSTU_Executor"
+
+## Tokenizer
+
+vocab_path: "PhonoVQA/phoneme_vocab.json"
+annotation_paths:
+  - "/content/ViTextVQA_train.json"
+
+## Training param
+DEVICE: "cuda"
+
+SAVE: TRUE
+SAVE_PATH: "PhonoVQA/models/"
+
+LR: 0.00005
+BETAS: 
+  - 0.9
+  - 0.98
+
+warmup_step: 2000
+
+NUM_EPOCHS: 10
+NUM_FREEZE_EPOCH: 0
+
+TRAIN_BATCH_SIZE: 16
+EVAL_BATCH_SIZE: 32
+PREDICT_BATCH_SIZE: 32
+
+max_predict_length: 128
+max_eval_length: 20
+
+get_predict_score: TRUE
+
+##DATA
+ocr_path: "/content/swintext_spotter"
+max_ocr_element: 50
+max_ocr_length: 100
+max_q_length: 30
+max_a_length: 128
+
+base_img_path: "/content/ViTextVQA_ViT_image"
+
+qa_train_path: "/content/ViTextVQA_fcsv/ViTextVQA_train.csv"
+qa_val_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
+qa_predict_path: "/content/ViTextVQA_fcsv/ViTextVQA_dev.csv"
+
+NUMWORKERS: 2
+
+## MODEL
+MODEL_CLASS: "PhonemePreSTU"
+
+MODEL_MOD_CONFIG_CLASS: "CustomizedPreSTU_config" # model modified config class
+
+backbone_name: "VietAI/vit5-base"
+
+vit_model_name: "google/vit-base-patch16-224-in21k"
+
+max_2d_position_embeddings: 1024
+
+num_decoder_layers: 4
+
+encoder_name: "VietAI/vit5-base"
+
+n_head: 12
+
+## Inference
+
+isgreedy: True
+num_beam: 1
+

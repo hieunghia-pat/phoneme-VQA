@@ -5,4 +5,7 @@ from .SaL import SaL, SaL_config
 from .CustomizedLaTr import CustomizedLaTr, CustomizedLaTr_config
 from .CustomizedPreSTU import CustomizedPreSTU, CustomizedPreSTU_config
 from .CustomizedSaL import CustomizedSaL, CustomizedSaL_config
+
 from .PhonemeLaTr import PhonemeLaTr
+from .PhonemePreSTU import PhonemePreSTU
+from .PhonemeSaL import PhonemeSaL

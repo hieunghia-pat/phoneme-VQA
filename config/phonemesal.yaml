@@ -1,0 +1,76 @@
+EXECUTOR: "PhonemeSaL_Executor"
+
+## Tokenizer
+
+vocab_path: "PhonoVQA/phoneme_vocab.json"
+annotation_paths:
+  - "/content/ViTextVQA_train.json"
+
+## Training param
+DEVICE: "cuda"
+
+SAVE: TRUE
+SAVE_PATH: "PhonoVQA/models/"
+
+LR: 0.00005
+BETAS: 
+  - 0.9
+  - 0.98
+
+warmup_step: 2000
+
+NUM_EPOCHS: 10
+NUM_FREEZE_EPOCH: 0
+
+TRAIN_BATCH_SIZE: 16
+EVAL_BATCH_SIZE: 32
+PREDICT_BATCH_SIZE: 32
+
+max_predict_length: 128
+max_eval_length: 20
+
+get_predict_score: TRUE
+
+##DATA
+max_ocr_element: 50
+max_ocr_length: 100
+max_obj_element: 25
+max_obj_length: 50
+max_q_length: 30
+max_a_length: 128
+
+base_ocr_feature_path: ""
+base_obj_feature_path: ""
+
+qa_train_path: ""
+qa_val_path: ""
+qa_predict_path: ""
+
+context_token: "<c>"
+
+NUMWORKERS: 2
+
+## MODEL
+MODEL_CLASS: "PhonemeSaL"
+
+MODEL_MOD_CONFIG_CLASS: "CustomizedSaL_config" # model modified config class
+
+backbone_name: "VietAI/vit5-base"
+
+ocr_hidden: 512
+
+obj_hidden: 2048
+
+max_2d_position_embeddings: 1024
+
+num_decoder_layers: 4
+
+encoder_name: "VietAI/vit5-base"
+
+n_head: 12
+
+## Inference
+
+isgreedy: True
+num_beam: 1
+

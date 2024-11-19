@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from logger.logger import get_logger
 from .base_executor import Base_Executor
 
-from core.data import textlayout_ocr_adapt, PhonemeLaTrDataset
+from core.data import textlayout_ocr_adapt, PhonemePreSTUDataset
 from core.tokenizer import PhonemeTokenizer
 
 from timeit import default_timer as timer
@@ -23,7 +23,7 @@ import itertools
 log = get_logger(__name__)
 
 
-class PhonemeLaTr_Executor(Base_Executor):
+class PhonemePreSTU_Executor(Base_Executor):
     def __init__(self, config, mode = 'train', evaltype='last', predicttype='best'):
         super().__init__(config, mode, evaltype, predicttype)
         log.info("---Initializing Executor---")
@@ -36,18 +36,12 @@ class PhonemeLaTr_Executor(Base_Executor):
         with torch.no_grad():
             for it, batch in enumerate(dataloader):
                 pixel_values = batch['pixel_values'].to(self.config.DEVICE)
-                coordinates = batch['coordinates'].to(self.config.DEVICE)
                 input_ids = batch['input_ids'].to(self.config.DEVICE)
                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE)
-                ocr_attention_mask = batch['ocr_attention_mask'].to(self.config.DEVICE)
-                tokenized_ocr = batch['tokenized_ocr'].to(self.config.DEVICE)
 
                 pred = self.model.generate( pixel_values,
-                                            coordinates,
                                             input_ids,
                                             src_attention_mask,
-                                            ocr_attention_mask,
-                                            tokenized_ocr,
                                             max_length = max_length,
                                             start_symbol = self.decode_tokenizer.bos_id,
                                             end_symbol = self.decode_tokenizer.eos_id,
@@ -73,7 +67,7 @@ class PhonemeLaTr_Executor(Base_Executor):
 
         log.info("# Creating Datasets")
         
-        self.train_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
+        self.train_data = PhonemePreSTUDataset(base_img_path = self.config.base_img_path,
                                         qa_df = train_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
@@ -84,7 +78,7 @@ class PhonemeLaTr_Executor(Base_Executor):
                                         max_input_length = self.config.max_q_length,
                                         max_output_length = self.config.max_a_length)
 
-        self.val_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
+        self.val_data = PhonemePreSTUDataset(base_img_path = self.config.base_img_path,
                                         qa_df = val_qa_df,
                                         ocr_df = ocr_df,
                                         tokenizer = self.tokenizer,
@@ -105,7 +99,7 @@ class PhonemeLaTr_Executor(Base_Executor):
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
 
-            self.val_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
+            self.val_data = PhonemePreSTUDataset(base_img_path = self.config.base_img_path,
                                             qa_df = val_qa_df,
                                             ocr_df = ocr_df,
                                             tokenizer = self.tokenizer,
@@ -126,7 +120,7 @@ class PhonemeLaTr_Executor(Base_Executor):
         
             ocr_df = textlayout_ocr_adapt(self.config.ocr_path)
 
-            self.predict_data = PhonemeLaTrDataset(base_img_path = self.config.base_img_path,
+            self.predict_data = PhonemePreSTUDataset(base_img_path = self.config.base_img_path,
                                                 qa_df = predict_qa_df,
                                                 ocr_df = ocr_df,
                                                 tokenizer = self.tokenizer,
@@ -167,14 +161,10 @@ class PhonemeLaTr_Executor(Base_Executor):
             label_attention_mask = label_attention_mask[:, :-1]
 
             onset_logits, rhyme_logits, tone_logits= self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                                                coordinates = batch['coordinates'].to(self.config.DEVICE),
                                                                 input_ids = batch['input_ids'].to(self.config.DEVICE),
                                                                 labels = trg_input,
                                                                 src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                                                label_attention_mask = label_attention_mask,
-                                                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
-                                                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE))
-
+                                                                label_attention_mask = label_attention_mask,)
 
             self.optim.zero_grad()
 
@@ -211,18 +201,14 @@ class PhonemeLaTr_Executor(Base_Executor):
                 label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)
                 labels = batch['label_ids'].type(torch.long).to(self.config.DEVICE)
 
-
                 trg_input = labels[:, :-1]
                 label_attention_mask = label_attention_mask[:, :-1]
 
                 onset_logits, rhyme_logits, tone_logits= self.model(pixel_values = batch['pixel_values'].to(self.config.DEVICE),
-                                                                coordinates = batch['coordinates'].to(self.config.DEVICE),
-                                                                input_ids = batch['input_ids'].to(self.config.DEVICE),
-                                                                labels = trg_input,
-                                                                src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
-                                                                label_attention_mask = label_attention_mask,
-                                                                ocr_attention_mask=batch['ocr_attention_mask'].to(self.config.DEVICE) ,
-                                                                tokenized_ocr=batch['tokenized_ocr'].to(self.config.DEVICE))
+                                                                    input_ids = batch['input_ids'].to(self.config.DEVICE),
+                                                                    labels = trg_input,
+                                                                    src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE),
+                                                                    label_attention_mask = label_attention_mask,)
 
                 onset_tgt_out = labels[:, 1:, 0]
                 rhyme_tgt_out = labels[:, 1:, 1]
@@ -234,7 +220,6 @@ class PhonemeLaTr_Executor(Base_Executor):
                 tone_loss = self.loss_fn(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
                 
                 loss = onset_loss + rhyme_loss + tone_loss
-
                 losses += loss.data.item()
 
                 if it+1 == 1 or (it+1) % 20 == 0 or it+1==self.valiter_length:
@@ -251,7 +236,7 @@ class PhonemeLaTr_Executor(Base_Executor):
         else:
             self.model_config = AutoConfig.from_pretrained(self.config.backbone_name)
 
-        self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config, 
+        self.model = self.build_class(self.config.MODEL_CLASS)(self.model_config,
                                                                 self.onset_vocab_size,
                                                                 self.rhyme_vocab_size,
                                                                 self.tone_vocab_size)

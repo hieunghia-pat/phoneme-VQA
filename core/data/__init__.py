@@ -8,3 +8,5 @@ from .CustomizedPreSTUDataset import CustomizedPreSTUDataset
 from .CustomizedSaLDataset import CustomizedSaLDataset
 
 from .PhonemeLaTrDataset import PhonemeLaTrDataset
+from .PhonemePreSTUDataset import PhonemePreSTUDataset
+from .PhonemeSaLDataset import PhonemeSaLDataset
