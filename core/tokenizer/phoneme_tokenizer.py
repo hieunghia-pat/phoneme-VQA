@@ -23,9 +23,6 @@ class PhonemeTokenizer:
                     json.dump(self.vocab, f, ensure_ascii=False, indent=4)
         else:
             raise ValueError("Must provide 'vocab_path' or 'annotation_paths'.")
-
-        if ' ' not in self.vocab['onset']:
-            self.vocab['onset'][' '] = len(self.vocab['onset'])
         self.rev_onset_vocab = {v: k for k, v in self.vocab['onset'].items()}
         self.rev_rhyme_vocab = {v: k for k, v in self.vocab['rhyme'].items()}
         self.rev_tone_vocab = {v: k for k, v in self.vocab['tone'].items()}
