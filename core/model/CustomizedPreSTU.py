@@ -43,7 +43,7 @@ class CustomizedPreSTU(nn.Module):
                 src_attention_mask,
                 label_attention_mask):
 
-        inputs_embeds, attention_mask = self.calculate_embedding(
+        inputs_embeds, attention_mask = self._calculate_embedding(
                 pixel_values, input_ids, src_attention_mask)
 
         encoder_outputs = self.encoder(
@@ -218,17 +218,13 @@ class CustomizedPreSTU(nn.Module):
         return chosen
     
     
-    def _calculate_embedding(self, pixel_values, coordinates, input_ids, ocr_attention_mask, src_attention_mask, tokenized_ocr):
+    def _calculate_embedding(self, pixel_values, input_ids, src_attention_mask):
         img_feat = self.visual_projector(self.vit(pixel_values).last_hidden_state)
-        spatial_feat = self.spatial_feat_extractor(coordinates)
-        ocr_feat = self.encoder.shared(tokenized_ocr)
-        language_feat = self.encoder.shared(input_ids)
+        language_ocr_feat = self.encoder.shared(input_ids)
 
-        layout_feat = ocr_feat + spatial_feat
-
-        multi_modal_feat = torch.cat([img_feat, layout_feat, language_feat], axis=1)
+        multi_modal_feat = torch.cat([img_feat, language_ocr_feat], axis=1)
         input_attention_mask = torch.cat(
-            [torch.ones(img_feat.shape[:2]).to(img_feat.device), ocr_attention_mask, src_attention_mask], axis=1)
+            [torch.ones(img_feat.shape[:2]).to(img_feat.device), src_attention_mask], axis=1)
 
         return multi_modal_feat, input_attention_mask
 

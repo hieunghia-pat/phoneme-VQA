@@ -90,7 +90,7 @@ class CustomizedPreSTUDataset(BaseDataset):
         return ids == pad_token_id
 
 
-    def create_features(self, ques, ocr_texts):
+    def create_properties(self, ques, ocr_texts):
         ocr_texts = ocr_texts[:self.max_ocr_element]
 
         ques_special_tokens_count = 2 
