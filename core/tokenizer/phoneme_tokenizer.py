@@ -10,7 +10,7 @@ from .modules import VocabBuilder
 import os
 
 
-class PhonemeTokenizer:
+class VietnameseTokenizer:
     def __init__(self, vocab_path: str = None, annotation_paths: list[str] = None):
         if vocab_path and os.path.exists(vocab_path):
             with open(vocab_path, 'r', encoding='utf-8') as f:
@@ -18,16 +18,14 @@ class PhonemeTokenizer:
         elif annotation_paths:
             vocab_builder = VocabBuilder(annotation_paths)
             self.vocab = vocab_builder.vocab
-
             if vocab_path:
                 with open(vocab_path, 'w', encoding='utf-8') as f:
                     json.dump(self.vocab, f, ensure_ascii=False, indent=4)
         else:
             raise ValueError("Must provide 'vocab_path' or 'annotation_paths'.")
-        
-        if '<pad>' not in self.vocab['onset'] or '<bos>' not in self.vocab['onset'] or '<eos>' not in self.vocab['onset']:
-            raise ValueError("Vocab must contain special tokens!")
-        
+
+        if ' ' not in self.vocab['onset']:
+            self.vocab['onset'][' '] = len(self.vocab['onset'])
         self.rev_onset_vocab = {v: k for k, v in self.vocab['onset'].items()}
         self.rev_rhyme_vocab = {v: k for k, v in self.vocab['rhyme'].items()}
         self.rev_tone_vocab = {v: k for k, v in self.vocab['tone'].items()}
@@ -48,12 +46,12 @@ class PhonemeTokenizer:
             'ây': 'â',
             'eo': 'e',
             'êu': 'ê',
-            'ia': 'a',
+            'ia': 'i',
             'iê': 'ê',
             'ie': 'e',
-            'iu': 'u',
+            'iu': 'i',
             'oa': 'a',
-            'oe': 'e',
+            'oe': 'o',
             'oi': 'o',
             'ôi': 'ô',
             'ơi': 'ơ',
@@ -66,9 +64,6 @@ class PhonemeTokenizer:
             'ưa': 'ư',
             'ươ': 'ơ',
             'ưu': 'ư',
-            'ye': 'e',
-            'ya': 'a',
-            'yo': 'o',
             'yê': 'ê',
             'yêu': 'ê',
             'iêu': 'ê',
@@ -84,11 +79,9 @@ class PhonemeTokenizer:
             'oai': 'a',
             'oay': 'a',
             'oeo': 'e',
+            'oac': 'a',
+            'oan': 'a',
         }
-
-        self.pad_id = self.vocab['onset'].get('<pad>', self.vocab['onset']['none'])
-        self.bos_id = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
-        self.eos_id = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
 
     def find_tone_position(self, syllable):
         syllable_nfd = unicodedata.normalize('NFD', syllable)
@@ -112,13 +105,21 @@ class PhonemeTokenizer:
             char_idx += len(letter)
 
         is_qu = False
+        is_gi = False
         if letters[0].lower() == 'q' and len(letters) > 1 and letters[1].lower() == 'u':
             is_qu = True
+        elif letters[0].lower() == 'g' and letters[1].lower() == 'i':
+            # Kiểm tra nếu từ có hơn 2 chữ cái
+            if len(letters) > 2:
+                is_gi = True
+            else:
+                is_gi = False  # Trường hợp từ có 2 chữ cái, 'g' là âm đầu, 'i' là nguyên âm
 
         vowel_indices = []
         for i, letter in enumerate(letters):
             if letter.lower() in vowels:
-                if is_qu and i == 1 and letters[i].lower() == 'u':
+                if (is_qu and i == 1 and letters[i].lower() == 'u') or \
+                (is_gi and i == 1 and letters[i].lower() == 'i'):
                     continue
                 vowel_indices.append(i)
 
@@ -155,6 +156,8 @@ class PhonemeTokenizer:
             return pos, length
 
         return -1, 0
+
+
 
     def remove_existing_tone(self, syllable):
         syllable_nfd = unicodedata.normalize('NFD', syllable)
@@ -211,6 +214,7 @@ class PhonemeTokenizer:
         return text.strip()
 
     def encode(self, sentence: str, max_length) -> list[list[int]]:
+        sentence = sentence.lower()
         tokens = re.findall(r'\S+|\s', sentence)
         phoneme_indices = []
 
