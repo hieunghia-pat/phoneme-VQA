@@ -10,7 +10,7 @@ from .modules import VocabBuilder
 import os
 
 
-class VietnameseTokenizer:
+class PhonemeTokenizer:
     def __init__(self, vocab_path: str = None, annotation_paths: list[str] = None):
         if vocab_path and os.path.exists(vocab_path):
             with open(vocab_path, 'r', encoding='utf-8') as f:
