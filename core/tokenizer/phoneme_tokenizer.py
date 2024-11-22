@@ -109,11 +109,11 @@ class VietnameseTokenizer:
         if letters[0].lower() == 'q' and len(letters) > 1 and letters[1].lower() == 'u':
             is_qu = True
         elif letters[0].lower() == 'g' and letters[1].lower() == 'i':
-            # Kiểm tra nếu từ có hơn 2 chữ cái
-            if len(letters) > 2:
+            # Kiểm tra nếu chữ cái thứ ba là nguyên âm
+            if len(letters) > 2 and letters[2].lower() in vowels:
                 is_gi = True
             else:
-                is_gi = False  # Trường hợp từ có 2 chữ cái, 'g' là âm đầu, 'i' là nguyên âm
+                is_gi = False  # 'i' thuộc về vần
 
         vowel_indices = []
         for i, letter in enumerate(letters):
@@ -156,6 +156,7 @@ class VietnameseTokenizer:
             return pos, length
 
         return -1, 0
+
 
 
 
