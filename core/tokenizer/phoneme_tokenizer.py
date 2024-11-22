@@ -79,6 +79,9 @@ class PhonemeTokenizer:
             'oac': 'a',
             'oan': 'a',
         }
+        self.pad_id = self.vocab['onset'].get('<pad>', self.vocab['onset']['none'])
+        self.bos_id = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
+        self.eos_id = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
 
     def find_tone_position(self, syllable):
         syllable_nfd = unicodedata.normalize('NFD', syllable)
