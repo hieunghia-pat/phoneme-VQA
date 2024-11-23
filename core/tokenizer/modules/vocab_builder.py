@@ -18,11 +18,18 @@ class VocabBuilder:
             'tone': {'none': 0}
         }
         
-        # Thêm token đặc biệt <bos>, và <eos> vào từ điển onset
+        # Thêm token đặc biệt <pad>, <bos>, và <eos> vào từ điển onset
+        if '<pad>' not in self.vocab['onset']:
+            self.vocab['onset']['<pad>'] = len(self.vocab['onset'])
+        if '<pad>' not in self.vocab['rhyme']:
+            self.vocab['rhyme']['<pad>'] = len(self.vocab['rhyme'])
+        if '<pad>' not in self.vocab['tone']:
+            self.vocab['tone']['<pad>'] = len(self.vocab['tone'])
         if '<bos>' not in self.vocab['onset']:
             self.vocab['onset']['<bos>'] = len(self.vocab['onset'])
         if '<eos>' not in self.vocab['onset']:
             self.vocab['onset']['<eos>'] = len(self.vocab['onset'])
+        
         
         self.word_sources = {'onset': {}, 'rhyme': {}, 'tone': {}}
         self.text_sources = {'rhyme': {}}
