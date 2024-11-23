@@ -79,9 +79,6 @@ class PhonemeTokenizer:
             'oac': 'a',
             'oan': 'a',
         }
-        self.pad_id = self.vocab['onset'].get('none', self.vocab['onset']['none'])
-        self.bos_id = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
-        self.eos_id = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
 
     def find_tone_position(self, syllable):
         syllable_nfd = unicodedata.normalize('NFD', syllable)
@@ -268,9 +265,9 @@ class PhonemeTokenizer:
 
         if len(phoneme_indices) < max_length:
             pad_length = max_length - len(phoneme_indices)
-            onset_idx_pad = self.pad_id
-            rhyme_idx_pad = self.vocab['rhyme'].get('none', self.vocab['rhyme']['none'])
-            tone_idx_pad = self.vocab['tone'].get('none', self.vocab['tone']['none'])
+            onset_idx_pad = self.vocab['onset'].get('<pad>', self.vocab['onset']['<pad>'])
+            rhyme_idx_pad = self.vocab['rhyme'].get('<pad>', self.vocab['rhyme']['<pad>'])
+            tone_idx_pad = self.vocab['tone'].get('<pad>', self.vocab['tone']['<pad>'])
             pad_indices = [[onset_idx_pad, rhyme_idx_pad, tone_idx_pad]] * pad_length
             phoneme_indices.extend(pad_indices)
 
@@ -281,7 +278,7 @@ class PhonemeTokenizer:
         return [self.encode(sentence, max_length) for sentence in sentences]
 
     def decode(self, phoneme_matrix: list[list[int]]) -> str:
-        pad_onset_idx = self.pad_id
+        pad_onset_idx = self.vocab['onset'].get('<pad>', self.vocab['onset']['none'])
         bos_onset_idx = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
         eos_onset_idx = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
 
@@ -345,9 +342,9 @@ class PhonemeTokenizer:
             
 
     def create_mask(self, phoneme_indices: list[list[int]]) -> list[int]:
-        onset_idx_pad = self.pad_id
-        rhyme_idx_pad = self.pad_id
-        tone_idx_pad = self.pad_id
+        onset_idx_pad = self.vocab['onset'].get('<pad>', self.vocab['onset']['<pad>'])
+        rhyme_idx_pad = self.vocab['rhyme'].get('<pad>', self.vocab['rhyme']['<pad>'])
+        tone_idx_pad = self.vocab['tone'].get('<pad>', self.vocab['tone']['<pad>'])
         
         mask = []
         for phoneme in phoneme_indices:
