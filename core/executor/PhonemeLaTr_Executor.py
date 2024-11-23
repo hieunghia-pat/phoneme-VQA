@@ -183,9 +183,9 @@ class PhonemeLaTr_Executor(Base_Executor):
             tone_tgt_out = labels[:, 1:, 2]
 
 
-            onset_loss = self.loss_fn(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
-            rhyme_loss = self.loss_fn(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
-            tone_loss = self.loss_fn(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
+            onset_loss = self.loss_fn_onset(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
+            rhyme_loss = self.loss_fn_rhyme(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
+            tone_loss = self.loss_fn_tone(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
             
             loss = onset_loss + rhyme_loss + tone_loss
 
@@ -229,9 +229,9 @@ class PhonemeLaTr_Executor(Base_Executor):
                 tone_tgt_out = labels[:, 1:, 2]
 
 
-                onset_loss = self.loss_fn(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
-                rhyme_loss = self.loss_fn(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
-                tone_loss = self.loss_fn(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
+                onset_loss = self.loss_fn_onset(onset_logits.reshape(-1, onset_logits.shape[-1]), onset_tgt_out.reshape(-1))
+                rhyme_loss = self.loss_fn_rhyme(rhyme_logits.reshape(-1, rhyme_logits.shape[-1]), rhyme_tgt_out.reshape(-1))
+                tone_loss = self.loss_fn_tone(tone_logits.reshape(-1, tone_logits.shape[-1]), tone_tgt_out.reshape(-1))
                 
                 loss = onset_loss + rhyme_loss + tone_loss
 
@@ -260,7 +260,9 @@ class PhonemeLaTr_Executor(Base_Executor):
     @override
     def _init_training_properties(self):
         self.optim = torch.optim.Adam(self.model.parameters(), lr=self.config.LR, betas=self.config.BETAS, eps=1e-9)
-        self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
+        self.loss_fn_onset = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
+        self.loss_fn_rhyme = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
+        self.loss_fn_tone = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
         self.scheduler = torch.optim.lr_scheduler.LinearLR(optimizer = self.optim, total_iters = self.config.warmup_step)
 
         self.SAVE = self.config.SAVE

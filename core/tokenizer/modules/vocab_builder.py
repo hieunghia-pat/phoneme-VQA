@@ -18,9 +18,7 @@ class VocabBuilder:
             'tone': {'none': 0}
         }
         
-        # Thêm token đặc biệt <pad>, <bos>, và <eos> vào từ điển onset
-        if '<pad>' not in self.vocab['onset']:
-            self.vocab['onset']['<pad>'] = len(self.vocab['onset'])
+        # Thêm token đặc biệt <bos>, và <eos> vào từ điển onset
         if '<bos>' not in self.vocab['onset']:
             self.vocab['onset']['<bos>'] = len(self.vocab['onset'])
         if '<eos>' not in self.vocab['onset']:
