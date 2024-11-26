@@ -26,6 +26,9 @@ class PhonemeTokenizer:
         self.rev_onset_vocab = {v: k for k, v in self.vocab['onset'].items()}
         self.rev_rhyme_vocab = {v: k for k, v in self.vocab['rhyme'].items()}
         self.rev_tone_vocab = {v: k for k, v in self.vocab['tone'].items()}
+        self.bos_id = self.vocab['onset']['<bos>']
+        self.eos_id = self.vocab['onset']['<eos>']
+        self.pad_id = self.vocab['onset']['<pad>']
         self.diacritics = {
             '<`>': '\u0300',
             '</>': '\u0301',
