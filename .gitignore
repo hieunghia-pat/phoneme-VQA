@@ -1,0 +1,6 @@
+datasets
+checkpoints
+*examine*
+*__pyc__
+*__pycache__
+*.sh

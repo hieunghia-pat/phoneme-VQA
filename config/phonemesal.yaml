@@ -2,24 +2,26 @@ EXECUTOR: "PhonemeSaL_Executor"
 
 ## Tokenizer
 
-vocab_path: "PhonoVQA/phoneme_vocab.json"
+vocab_path: "checkpoints/phoneme-sal"
 annotation_paths:
-  - "/content/ViTextVQA_train.json"
+  - datasets/ViTextVQA-dataset/ViTextVQA_train.json
+  - datasets/ViTextVQA-dataset/ViTextVQA_dev.json
+  - datasets/ViTextVQA-dataset/ViTextVQA_test.json
 
 ## Training param
-DEVICE: "cuda"
+DEVICE: cpu
 
 SAVE: TRUE
-SAVE_PATH: "PhonoVQA/models/"
+SAVE_PATH: "checkpoints/phoneme-sal"
 
 LR: 0.00005
 BETAS: 
   - 0.9
   - 0.98
 
-warmup_step: 2000
+warmup_step: 1000
 
-NUM_EPOCHS: 10
+NUM_EPOCHS: 20
 NUM_FREEZE_EPOCH: 0
 
 TRAIN_BATCH_SIZE: 16
@@ -27,28 +29,28 @@ EVAL_BATCH_SIZE: 32
 PREDICT_BATCH_SIZE: 32
 
 max_predict_length: 128
-max_eval_length: 20
+max_eval_length: 80
 
 get_predict_score: TRUE
 
 ##DATA
-max_ocr_element: 50
-max_ocr_length: 100
-max_obj_element: 25
-max_obj_length: 50
-max_q_length: 30
-max_a_length: 128
+max_ocr_element: 32
+max_ocr_length: 128
+max_obj_element: 32
+max_obj_length: 128
+max_q_length: 80
+max_a_length: 40
 
-base_ocr_feature_path: ""
-base_obj_feature_path: ""
+base_ocr_feature_path: "datasets/ViTextVQA-dataset/features/swintext_spotter"
+base_obj_feature_path: "datasets/ViTextVQA-dataset/features/vinvl_vinvl"
 
-qa_train_path: ""
-qa_val_path: ""
-qa_predict_path: ""
+qa_train_path: "datasets/ViTextVQA-dataset/train.csv"
+qa_val_path: "datasets/ViTextVQA-dataset/dev.csv"
+qa_predict_path: "datasets/ViTextVQA-dataset/test.csv"
 
 context_token: "<c>"
 
-NUMWORKERS: 2
+NUMWORKERS: 0
 
 ## MODEL
 MODEL_CLASS: "PhonemeSaL"

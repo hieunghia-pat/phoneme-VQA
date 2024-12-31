@@ -1,6 +1,4 @@
 import os
-import sys
-import json
 import torch
 import math
 import pandas as pd
@@ -13,12 +11,7 @@ from .base_executor import Base_Executor
 from core.data import textlayout_ocr_adapt, textlayout_obj_adapt, CustomizedSaLDataset
 from core.tokenizer import *
 
-from timeit import default_timer as timer
-
-import evaluation
-
 from transformers import AutoTokenizer, AutoConfig
-import itertools
 
 log = get_logger(__name__)
 
@@ -85,7 +78,7 @@ class CustomizedSaL_Executor(Base_Executor):
     def _init_training_properties(self):
         self.optim = torch.optim.Adam(self.model.parameters(), lr=self.config.LR, betas=self.config.BETAS, eps=1e-9)
         self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=self.decode_tokenizer.pad_id)    
-        self.scheduler = torch.optim.lr_scheduler.LinearLR(optimizer = self.optim, total_iters = self.config.warmup_step)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda epoch: 0.95 ** epoch)
 
         self.SAVE = self.config.SAVE
 
@@ -221,14 +214,14 @@ class CustomizedSaL_Executor(Base_Executor):
         self.model.train()
         losses = 0
 
-        if epoch <= self.config.NUM_FREEZE_EPOCH:
-            for child in self.model.encoder.children():
-                for param in child.parameters():
-                    param.requires_grad = False
-        else:
-            for child in self.model.encoder.children():
-                for param in child.parameters():
-                    param.requires_grad = True
+        # if epoch <= self.config.NUM_FREEZE_EPOCH:
+        #     for child in self.model.encoder.children():
+        #         for param in child.parameters():
+        #             param.requires_grad = False
+        # else:
+        #     for child in self.model.encoder.children():
+        #         for param in child.parameters():
+        #             param.requires_grad = True
         
         for it, batch in enumerate(self.trainiter):
             label_attention_mask = batch['label_attention_mask'].to(self.config.DEVICE)

@@ -16,7 +16,7 @@ from timeit import default_timer as timer
 
 import evaluation
 
-from transformers import AutoTokenizer, AutoConfig
+from transformers import AutoConfig
 import itertools
 
 log = get_logger(__name__)
@@ -89,12 +89,9 @@ class Base_Executor():
         s_train_time = timer()
 
         for epoch in range(1, self.config.NUM_EPOCHS+1):
-            train_loss = self._train_epoch(epoch)
-            val_loss = self._evaluate()
+            self._train_epoch(epoch)
             res = self._evaluate_metrics()
-            f1 = res["F1"]
-            log.info(f'\tTraining Epoch {epoch}:')
-            log.info(f'\tTrain Loss: {train_loss:.4f} - Val. Loss: {val_loss:.4f}')
+            f1 = res["Accuracy"]
             log.info(res)
             
             if m_f1 < f1:
@@ -159,8 +156,6 @@ class Base_Executor():
             preds = self.infer(self.predictiter, self.config.max_predict_length)
             results = [{"gens": p} for p in preds]
 
-
-
         if self.config.SAVE_PATH:
             with open(os.path.join(self.config.SAVE_PATH, "results.json"), 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=4)
@@ -173,7 +168,7 @@ class Base_Executor():
     def _init_training_properties(self):
         self.optim = torch.optim.Adam(self.model.parameters(), lr=self.config.LR, betas=self.config.BETAS, eps=1e-9)
         self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=self.tokenizer.pad_token_id)    
-        self.scheduler = torch.optim.lr_scheduler.LinearLR(optimizer = self.optim, total_iters = self.config.warmup_step)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer = self.optim, lr_lambda=lambda epoch: 0.95 ** epoch)
 
         self.SAVE = self.config.SAVE
 

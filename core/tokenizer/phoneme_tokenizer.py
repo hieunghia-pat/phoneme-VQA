@@ -1,359 +1,200 @@
-import json
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import re
-import unicodedata
-import numpy as np
-from .modules import is_Vietnamese
-from .modules import VocabBuilder
-import os
 
+from decode.word_processing import is_Vietnamese, decompose_non_vietnamese_word, compose_word, split_phoneme
 
 class PhonemeTokenizer:
-    def __init__(self, vocab_path: str = None, annotation_paths: list[str] = None):
-        if vocab_path and os.path.exists(vocab_path):
-            with open(vocab_path, 'r', encoding='utf-8') as f:
-                self.vocab = json.load(f)
-        elif annotation_paths:
-            vocab_builder = VocabBuilder(annotation_paths)
-            self.vocab = vocab_builder.vocab
-            if vocab_path:
-                with open(vocab_path, 'w', encoding='utf-8') as f:
-                    json.dump(self.vocab, f, ensure_ascii=False, indent=4)
+    def __init__(self):
+        
+        self.pad_token = "<pad>"
+        self.bos_token = "<bos>"
+        self.eos_token = "<eos>"
+        self.blank_token = None
+        self.special_tokens = [self.pad_token, self.bos_token, self.eos_token, self.blank_token]
+
+        onsets = [
+            'ngh', 'tr', 'th', 'ph', 'nh', 'ng', 'kh', 
+            'gi', 'gh', 'ch', 'q', 'đ', 'x', 'v', 't', 
+            's', 'r', 'n', 'm', 'l', 'k', 'h', 'g', 'd', 
+            'c', 'b'
+        ]
+        rhymes = [
+            # a
+            "a", "ac", "ach", "ai", 
+            "am", "an", "ang", "anh", 
+            "ao", "ap", "at", "ay", "au",
+            # ă
+            "ă", "ăc", "ăm", "ăn", "ăng", "ăp", "ăt",
+            # â
+            "â", "âc", "âm", "ân", "âng",
+            "âp", "ât", "âu", "ây",
+            # e
+            "e", "ec", "em", "en",
+            "eng", "eo", "ep", "et",
+            # ê
+            "ê", "êch", "êm", "ên", 
+            "ênh", "êp", "êt", "êu",
+            # i
+            "i", "ia", "ich", "iêc", "iêm", "iên",
+            "iêng", "iêp", "iêt", "iêu", "im", "in",
+            "inh", "ip", "it", "iu",
+            # o
+            "o", "oa", "oac", "oach", "oai",
+            "oam", "oan", "oang", "oanh",
+            "oao", "oap", "oat", "oay",
+            "oăc", "oăm", "oăn", "oăng",
+            "oăt", "oc", "oe", "oen","oeo",
+            "oet", "oi", "om", "on", "ong",
+            "ooc", "oong", "op", "ot",
+            # ô
+            "ô", "ôc", "ôi",
+            "ôm", "ôn", "ông",
+            "ôp", "ôt",
+            # ơ
+            "ơ", "ơi", "ơm",
+            "ơn", "ơp", "ơt",
+            # u
+            "u", "ua", "uân", "uâng", "uât",
+            "uây", "uc", "uê", "uêch", "uênh",
+            "ui", "um", "un", "ung", "uơ", "uôc",
+            "uôi", "uôm", "uôn", "uông", "uôt",
+            "up", "ut", "uy", "uya", "uych",
+            "uyên", "uyêt", "uyn", "uynh",
+            "uyp", "uyt", "uyu",
+            "uach", "uai", "uan", "uang", "uanh", "uao", "uat", "uau", "uay",
+            "uăc", "uăm", "uăn", "uăng", "uăp", "uăt", "uâc", "uât", "uoang",
+            "ue", "uen", "ueo", "uet", "uên", "uêt", "uêu", "uơ", "uơi",
+            
+            # ư
+            "ư", "ưa", "ưc", "ưi",
+            "ưng", "ươc", "ươi",
+            "ươm", "ươn", "ương",
+            "ươp", "ươt", "ươu",
+            "ưt", "ưu",
+            # y
+            "y", "yêm", "yên", 
+            "yêng", "yêt", "yêu",
+            # punctuations
+            "?", ",", ".", "-","/", 
+            "!", "@", "(", ")", ":", 
+            "%", "\"", "*", "'", "+",
+            "$",
+            # numbers
+            "0", "1", "2", "3", "4", 
+            "5", "6", "7", "8", "9",
+            # foreign letters
+            "w", "f", "z", "j", "p"
+        ]
+        tones = ['<huyền>', '<sắc>', '<ngã>', '<hỏi>', '<nặng>']
+        phonemes = self.special_tokens + onsets + rhymes + tones
+        self.phoneme2idx = {
+            phoneme: idx for idx, phoneme in enumerate(phonemes)
+        }
+        self.idx2phoneme = {idx: phoneme for phoneme, idx in self.phoneme2idx.items()}
+        
+        self.pad_idx = self.phoneme2idx[self.pad_token]
+        self.bos_idx = self.phoneme2idx[self.bos_token]
+        self.eos_idx = self.phoneme2idx[self.eos_token]
+        self.blank_idx = self.phoneme2idx[self.blank_token]
+
+    @property
+    def size(self) -> int:
+        return len(self.phoneme2idx)
+
+    def encode(self, sentence: str, max_length: int) -> torch.Tensor:
+        words = sentence.split()
+        
+        word_components = []
+        word_indices = [] # mark the token belonging to a word
+        word_index = 1
+        for word in words:
+            is_Vietnamese_word, components = is_Vietnamese(word)
+            if is_Vietnamese_word:
+                word_components.append(components)
+                word_indices.append(word_index)
+            else:
+                characters = decompose_non_vietnamese_word(word)
+                word_components.extend(characters)
+                word_indices.extend([word_index]*len(characters))
+            word_index += 1
+
+        phoneme_script = []
+        for word_component in word_components:
+            onset, medial, nucleus, coda, tone = word_component
+            rhyme = compose_word(None, medial, nucleus, coda, None)
+            phoneme_script.append([
+                self.phoneme2idx[onset] if onset else self.blank_idx, 
+                self.phoneme2idx[rhyme] if rhyme else self.blank_idx, 
+                self.phoneme2idx[tone] if tone else self.blank_idx
+            ])
+        
+        bos_token = [self.bos_idx, self.blank_idx, self.blank_idx]
+        eos_token = [self.eos_idx, self.blank_idx, self.blank_idx]
+        phoneme_script = [bos_token] + phoneme_script + [eos_token]
+        # index for bos token and eos token
+        word_indices = [0] + word_indices + [max(word_indices)+1]
+
+        if len(phoneme_script) < max_length:
+            delta_length = max_length - len(phoneme_script)
+            padding_values = [[self.pad_idx]*3] * delta_length
+            phoneme_script.extend(padding_values)
+            word_indices.extend([max(word_indices)+1] * delta_length)
         else:
-            raise ValueError("Must provide 'vocab_path' or 'annotation_paths'.")
-        self.rev_onset_vocab = {v: k for k, v in self.vocab['onset'].items()}
-        self.rev_rhyme_vocab = {v: k for k, v in self.vocab['rhyme'].items()}
-        self.rev_tone_vocab = {v: k for k, v in self.vocab['tone'].items()}
-        self.bos_id = self.vocab['onset']['<bos>']
-        self.eos_id = self.vocab['onset']['<eos>']
-        self.pad_id = self.vocab['onset']['<pad>']
-        self.diacritics = {
-            '<`>': '\u0300',
-            '</>': '\u0301',
-            '<?>' : '\u0309',
-            '<~>': '\u0303',
-            '<.>': '\u0323',
-        }
-        self.vowel_groups = {
-            # Nguyên âm đôi và ba
-            'ai': 'a',
-            'ao': 'a',
-            'au': 'a',
-            'ay': 'a',
-            'âu': 'â',
-            'ây': 'â',
-            'eo': 'e',
-            'êu': 'ê',
-            'ia': 'i',
-            'iê': 'ê',
-            'ie': 'e',
-            'iu': 'i',
-            'oa': 'a',
-            'oe': 'o',
-            'oi': 'o',
-            'ôi': 'ô',
-            'ơi': 'ơ',
-            'oo': 'o',
-            'ua': 'u',
-            'uâ': 'â',
-            'uê': 'ê',
-            'ui': 'u',
-            'uy': 'y',
-            'ưa': 'ư',
-            'ươ': 'ơ',
-            'ưu': 'ư',
-            'yê': 'ê',
-            'yêu': 'ê',
-            'iêu': 'ê',
-            'uai': 'a',
-            'uay': 'a',
-            'uây': 'â',
-            'uôi': 'ô',
-            'ươi': 'ơ',
-            'uyê': 'ê',
-            'uyên': 'ê',
-            'uyê': 'ê',
-            'ươu': 'ơ',
-            'oai': 'a',
-            'oay': 'a',
-            'oeo': 'e',
-            'oac': 'a',
-            'oan': 'a',
-        }
+            phoneme_script = phoneme_script[:max_length]
+            word_indices = word_indices[:max_length]
 
-    def find_tone_position(self, syllable):
-        syllable_nfd = unicodedata.normalize('NFD', syllable)
-        vowels = 'aăâeêiioôơuưy'
-        letters = []
-        idx_map = []
+        return phoneme_script, word_indices
 
-        idx = 0
-        char_idx = 0
-        while idx < len(syllable_nfd):
-            c = syllable_nfd[idx]
-            base = c
-            combs = ''
-            idx += 1
-            while idx < len(syllable_nfd) and unicodedata.combining(syllable_nfd[idx]):
-                combs += syllable_nfd[idx]
-                idx += 1
-            letter = unicodedata.normalize('NFC', base + combs)
-            letters.append(letter)
-            idx_map.append(char_idx)
-            char_idx += len(letter)
-
-        is_qu = False
-        is_gi = False
-        if letters[0].lower() == 'q' and len(letters) > 1 and letters[1].lower() == 'u':
-            is_qu = True
-        elif letters[0].lower() == 'g' and letters[1].lower() == 'i':
-            # Kiểm tra nếu chữ cái thứ ba là nguyên âm
-            if len(letters) > 2 and letters[2].lower() in vowels:
-                is_gi = True
-            else:
-                is_gi = False  # 'i' thuộc về vần
-
-        vowel_indices = []
-        for i, letter in enumerate(letters):
-            if letter.lower() in vowels:
-                if (is_qu and i == 1 and letters[i].lower() == 'u') or \
-                (is_gi and i == 1 and letters[i].lower() == 'i'):
-                    continue
-                vowel_indices.append(i)
-
-        vowel_seq = ''.join([letters[i].lower() for i in vowel_indices])
-
-        max_length = min(3, len(vowel_seq))
-        for length in range(max_length, 0, -1):
-            for start in range(len(vowel_seq) - length + 1):
-                seq = vowel_seq[start:start+length]
-                if seq in self.vowel_groups:
-                    tone_vowel_char = self.vowel_groups[seq]
-                    for idx in vowel_indices[start:start+length]:
-                        if letters[idx].lower() == tone_vowel_char:
-                            pos = idx_map[idx]
-                            length = len(letters[idx])
-                            return pos, length
-                    idx = vowel_indices[start]
-                    pos = idx_map[idx]
-                    length = len(letters[idx])
-                    return pos, length
-
-        priority_vowels = ['ă', 'â', 'ê', 'ô', 'ơ', 'ư']
-        for vowel in priority_vowels:
-            for idx in vowel_indices:
-                if letters[idx].lower() == vowel:
-                    pos = idx_map[idx]
-                    length = len(letters[idx])
-                    return pos, length
-
-        if vowel_indices:
-            idx = vowel_indices[-1]
-            pos = idx_map[idx]
-            length = len(letters[idx])
-            return pos, length
-
-        return -1, 0
-
-
-
-
-    def remove_existing_tone(self, syllable):
-        syllable_nfd = unicodedata.normalize('NFD', syllable)
-        tone_marks = ['\u0300', '\u0301', '\u0303', '\u0309', '\u0323']
-        new_syllable_nfd = ''.join([c for c in syllable_nfd if c not in tone_marks])
-        return unicodedata.normalize('NFC', new_syllable_nfd)
-
-    def apply_tone(self, syllable, accent):
-        syllable = self.remove_existing_tone(syllable)
-        vowel_pos, vowel_len = self.find_tone_position(syllable)
-
-        if vowel_pos == -1:
-            return syllable
-
-        vowel = syllable[vowel_pos:vowel_pos+vowel_len]
-        vowel_nfd = unicodedata.normalize('NFD', vowel)
-        base_char = ''
-        diacritics_chars = []
-        for c in vowel_nfd:
-            if not unicodedata.combining(c):
-                base_char += c
-            else:
-                diacritics_chars.append(c)
-        diacritics_chars.append(accent)
-        diacritic_order = ['\u031B', '\u0306', '\u0302', '\u0309', '\u0300', '\u0301', '\u0303', '\u0323']
-        diacritics_chars.sort(key=lambda x: diacritic_order.index(x) if x in diacritic_order else 999)
-        new_vowel_nfd = base_char + ''.join(diacritics_chars)
-        new_vowel = unicodedata.normalize('NFC', new_vowel_nfd)
-        syllable = syllable[:vowel_pos] + new_vowel + syllable[vowel_pos+vowel_len:]
-
-        return syllable
-
-    def process_text(self, text):
-        tokens = re.split(r'(\s+)', text)
-        for idx, token in enumerate(tokens):
-            if not token.strip():
-                continue
-            for marker in self.diacritics:
-                while marker in token:
-                    idx_marker = token.find(marker)
-                    accent = self.diacritics[marker]
-                    token = token[:idx_marker] + token[idx_marker+len(marker):]
-                    if token == 'gii':
-                        token = 'gi'
-                    elif token == 'giin':
-                        token = 'gin'
-                    token = self.apply_tone(token, accent)
-            tokens[idx] = token
-        return ''.join(tokens)
-
-    def normalize_text(self, text: str) -> str:
-        text = unicodedata.normalize('NFC', text)
-        text = re.sub(r'[\s]+', ' ', text)
-        return text.strip()
-
-    def encode(self, sentence: str, max_length) -> list[list[int]]:
-        sentence = sentence.lower()
-        tokens = re.findall(r'\S+|\s', sentence)
-        phoneme_indices = []
-
-        bos_idx = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
-        phoneme_indices.append([bos_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-
-        for token in tokens:
-            token_phonemes = []
-            if token.isspace():
-                for _ in token:
-                    onset_idx = self.vocab['onset'].get('<_>', self.vocab['onset']['none'])
-                    token_phonemes.append([onset_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-            elif re.match(r'^[\W_]+$', token):
-                for char in token:
-                    onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['none'])
-                    token_phonemes.append([onset_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-            elif token == '<_>':
-                token_phonemes.append([self.vocab['onset']['<_>'], self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-            else:
-                try:
-                    is_vietnamese, components = is_Vietnamese(token)
-                    if is_vietnamese:
-                        onset, rhyme, tone = components
-                        onset_idx = self.vocab['onset'].get(onset, self.vocab['onset']['none'])
-                        rhyme_idx = self.vocab['rhyme'].get(rhyme, self.vocab['rhyme']['none'])
-                        tone_idx = self.vocab['tone'].get(tone, self.vocab['tone']['none'])
-                        token_phonemes.append([onset_idx, rhyme_idx, tone_idx])
-                    else:
-                        for char in token:
-                            onset_idx = self.vocab['onset'].get(char, self.vocab['onset']['none'])
-                            token_phonemes.append([onset_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-                except Exception as e:
-                    print(f"Error processing word '{token}': {e}")
-                    token_phonemes.append([self.vocab['onset']['none'], self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-
-            if len(phoneme_indices) + len(token_phonemes) >= max_length:
-                if not is_vietnamese:
-                    remaining_length = max_length - len(phoneme_indices) - 1
-                    token_phonemes = token_phonemes[:remaining_length]
-                else:
-                    break
-
-            phoneme_indices.extend(token_phonemes)
-
-        eos_idx = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
-        phoneme_indices.append([eos_idx, self.vocab['rhyme']['none'], self.vocab['tone']['none']])
-
-        if len(phoneme_indices) > max_length:
-            phoneme_indices = phoneme_indices[:max_length]
-
-        if len(phoneme_indices) < max_length:
-            pad_length = max_length - len(phoneme_indices)
-            onset_idx_pad = self.vocab['onset'].get('<pad>', self.vocab['onset']['<pad>'])
-            rhyme_idx_pad = self.vocab['rhyme'].get('<pad>', self.vocab['rhyme']['<pad>'])
-            tone_idx_pad = self.vocab['tone'].get('<pad>', self.vocab['tone']['<pad>'])
-            pad_indices = [[onset_idx_pad, rhyme_idx_pad, tone_idx_pad]] * pad_length
-            phoneme_indices.extend(pad_indices)
-
-        return phoneme_indices
-
-    def batch_encode(self, sentences: list[str], max_length) -> list[list[list[int]]]:
+    def batch_encode(self, sentences: list[str], max_length) -> torch.Tensor:
         sentences = [sentence.lower() for sentence in sentences]
-        return [self.encode(sentence, max_length) for sentence in sentences]
+        sentences = [self.encode(sentence, max_length) for sentence in sentences]
 
-    def decode(self, phoneme_matrix: list[list[int]]) -> str:
-        pad_onset_idx = self.vocab['onset'].get('<pad>', self.vocab['onset']['none'])
-        bos_onset_idx = self.vocab['onset'].get('<bos>', self.vocab['onset']['none'])
-        eos_onset_idx = self.vocab['onset'].get('<eos>', self.vocab['onset']['none'])
-
+        return torch.tensor(sentences)
+    
+    def decode(self, tensor_sentence: torch.Tensor, word_phrases: torch.Tensor) -> str:
+        '''
+            tensorscript: (1, seq_len)
+        '''
+        words = tensor_sentence.squeeze(0).long().tolist()
+        word_phrases = word_phrases.squeeze(0).long().tolist()
         sentence = []
+        current_phrase = 0
         current_word = ""
-        for phoneme in phoneme_matrix:
-            try:
-                onset_index, rhyme_index, tone_index = phoneme
-
-                if onset_index in {pad_onset_idx, bos_onset_idx, eos_onset_idx}:
-                    if onset_index == eos_onset_idx:
-                        break
-                    continue
-
-                onset = self.rev_onset_vocab.get(onset_index, '')
-                rhyme = self.rev_rhyme_vocab.get(rhyme_index, '')
-                tone = self.rev_tone_vocab.get(tone_index, '')
-
-                if onset == 'none':
-                    onset = ''
-                if rhyme == 'none':
-                    rhyme = ''
-                if tone == 'none':
-                    tone = ''
-
-                if onset == '<_>':
-                    if current_word:
-                        sentence.append(current_word)
-                        current_word = ""
-                    sentence.append(' ')
-                    continue
-
-
-                word = onset + rhyme
-
-                if tone:
-                    word = self.apply_tone(word, tone)
-
+        for word_components, phrase in zip(words, word_phrases):
+            onset, rhyme, tone = [self.idx2phoneme[idx] for idx in word_components]
+            if rhyme is not None:
+                _, medial, nucleus, coda = split_phoneme((onset if onset else "") + rhyme)
+            else:
+                medial = None
+                nucleus = None
+                coda = None
+            word = compose_word(onset, medial, nucleus, coda, tone)
+            if current_phrase != phrase:
+                # append the whole word into sentence
+                sentence.append(current_word)
+                # reset the current marks
+                current_phrase = phrase
+                current_word = word
+            else:
                 current_word += word
-            except Exception as e:
-                print(f"Error processing phoneme '{phoneme}': {e}")
-                if current_word:
-                    sentence.append(current_word)
-                    current_word = ""
 
-        if current_word:
-            sentence.append(current_word)
+        sentence = [word for word in sentence if word not in self.special_tokens]
+        sentence = " ".join(sentence)
 
-        final_sentence = ''.join(sentence)
-        return self.process_text(final_sentence)
+        return sentence
 
-    def batch_decode(self, phoneme_matrices: list[list[list[int]]]) -> list[str]:
-        return [self.decode(phoneme_matrix) for phoneme_matrix in phoneme_matrices]
+    def batch_decode(self, phoneme_matrices: torch.Tensor, word_phrases: torch.Tensor) -> list[str]:
+        return [self.decode(phoneme_matrix, word_phrase) for phoneme_matrix, word_phrase in zip(phoneme_matrices, word_phrases)]
 
     def __call__(self, sentences, max_length=30):
         if isinstance(sentences, str):
             return self.encode(sentences, max_length=max_length)
-            return encoded
         elif isinstance(sentences, list):
             return self.batch_encode(sentences, max_length=max_length)
-            
 
     def create_mask(self, phoneme_indices: list[list[int]]) -> list[int]:
-        onset_idx_pad = self.vocab['onset'].get('<pad>', self.vocab['onset']['<pad>'])
-        rhyme_idx_pad = self.vocab['rhyme'].get('<pad>', self.vocab['rhyme']['<pad>'])
-        tone_idx_pad = self.vocab['tone'].get('<pad>', self.vocab['tone']['<pad>'])
-        
         mask = []
         for phoneme in phoneme_indices:
-            if (phoneme[0] == onset_idx_pad and
-                phoneme[1] == rhyme_idx_pad and
-                phoneme[2] == tone_idx_pad):
+            if (phoneme[0] == self.pad_idx and phoneme[1] == self.pad_idx and phoneme[2] == self.pad_idx):
                 mask.append(1)
             else:
                 mask.append(0)

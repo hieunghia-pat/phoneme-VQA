@@ -45,8 +45,8 @@ class BaseDecoder(nn.Module):
         super(BaseDecoder, self).__init__()
         
         self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=emb_size, nhead=n_head, batch_first = batch_first)
-            ,num_layers=num_layers)
+            nn.TransformerDecoderLayer(d_model=emb_size, nhead=n_head, batch_first = batch_first),
+            num_layers=num_layers)
         
     def forward(self,
                 tgt,
@@ -54,7 +54,7 @@ class BaseDecoder(nn.Module):
                 tgt_mask = None,
                 memory_mask = None,
                 tgt_key_padding_mask = None,
-                memory_key_padding_mask = None,):
+                memory_key_padding_mask = None):
 
         return self.decoder(tgt=tgt,
                             memory=memory,

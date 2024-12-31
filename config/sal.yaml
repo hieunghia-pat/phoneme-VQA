@@ -3,17 +3,17 @@ EXECUTOR: "SaL_Executor"
 DEVICE: "cuda"
 
 SAVE: TRUE
-SAVE_PATH: "PhonoVQA/models/"
+SAVE_PATH: "checkpoints/SaL"
 
-LR: 0.00005
+LR: 0.1
 BETAS: 
   - 0.9
   - 0.98
 
-warmup_step: 2000
+warmup_step: 1000
 
 NUM_EPOCHS: 10
-TRAIN_BATCH_SIZE: 16
+TRAIN_BATCH_SIZE: 32
 EVAL_BATCH_SIZE: 32
 PREDICT_BATCH_SIZE: 32
 
@@ -23,23 +23,23 @@ max_eval_length: 20
 get_predict_score: TRUE
 
 ##DATA
-max_ocr_element: 50
+max_ocr_element: 32
 max_ocr_length: 100
-max_obj_element: 25
-max_obj_length: 50
-max_q_length: 30
+max_obj_element: 50
+max_obj_length: 100
+max_q_length: 80
 max_a_length: 128
 
-base_ocr_feature_path: ""
-base_obj_feature_path: ""
+base_ocr_feature_path: "datasets/ViTextVQA-dataset/features/swintext_spotter"
+base_obj_feature_path: "datasets/ViTextVQA-dataset/features/vinvl_vinvl"
 
-qa_train_path: ""
-qa_val_path: ""
-qa_predict_path: ""
+qa_train_path: "datasets/ViTextVQA-dataset/ViTextVQA_train.json"
+qa_val_path: "datasets/ViTextVQA-dataset/ViTextVQA_dev.json"
+qa_predict_path: "datasets/ViTextVQA-dataset/ViTextVQA_test.json"
 
 context_token: "<c>"
 
-NUMWORKERS: 2
+NUMWORKERS: 16
 
 ## MODEL
 MODEL_CLASS: "SaL"

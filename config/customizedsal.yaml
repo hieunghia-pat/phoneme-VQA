@@ -40,16 +40,16 @@ max_obj_length: 50
 max_q_length: 30
 max_a_length: 128
 
-base_ocr_feature_path: ""
-base_obj_feature_path: ""
+base_ocr_feature_path: "datasets/ViTextVQA-dataset/features/swintext_spotter"
+base_obj_feature_path: "datasets/ViTextVQA-dataset/features/vinvl_vinvl"
 
-qa_train_path: ""
-qa_val_path: ""
-qa_predict_path: ""
+qa_train_path: "datasets/ViTextVQA-dataset/ViTextVQA_train.json"
+qa_val_path: "datasets/ViTextVQA-dataset/ViTextVQA_dev.json"
+qa_predict_path: "datasets/ViTextVQA-dataset/ViTextVQA_test.json"
 
 context_token: "<c>"
 
-NUMWORKERS: 2
+NUMWORKERS: 16
 
 ## MODEL
 MODEL_CLASS: "CustomizedSaL"
@@ -64,7 +64,7 @@ obj_hidden: 2048
 
 max_2d_position_embeddings: 1024
 
-num_decoder_layers: 4
+num_decoder_layers: 12
 
 encoder_name: "VietAI/vit5-base"
 

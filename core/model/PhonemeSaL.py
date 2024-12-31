@@ -29,9 +29,7 @@ class CustomizedSaL_config:
 class PhonemeSaL(nn.Module):
     def __init__(self, 
                 config, 
-                onset_vocab_size,
-                rhyme_vocab_size,
-                tone_vocab_size, 
+                vocab_size, 
                 obj_dropout=0.1, 
                 ocr_dropout=0.1):
         super().__init__()
@@ -54,16 +52,10 @@ class PhonemeSaL(nn.Module):
         self.ocr_feature_layer_norm = T5LayerNorm(self.encoder.config.d_model)
 
         ###### CUSTOM COMPONENTS ######
-        
-        self.rhyme_tone_embed_dim = self.encoder.config.d_model // 3
-        self.onset_embed_dim = int(self.encoder.config.d_model - self.rhyme_tone_embed_dim*2)
 
         self.tgt_tok_emb = PhonemeEmbedding(
-            onset_vocab_size,
-            rhyme_vocab_size,
-            tone_vocab_size,
-            self.onset_embed_dim,
-            self.rhyme_tone_embed_dim
+            vocab_size=vocab_size,
+            embed_dim=self.encoder.config.d_model // 3
         )
 
         self.positional_encoding = SinusoidalPositionalEncoding(
@@ -75,20 +67,17 @@ class PhonemeSaL(nn.Module):
                             n_head=self.config.n_head
                         )
 
-        # shared lm_head
-        self.shared_lm_head = nn.Linear(
-            self.encoder.config.d_model, self.encoder.config.d_model)
+        self.onset_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
+        self.rhyme_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
+        self.tone_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
 
-        # phoneme lm_head
-        self.onset_lm_head = nn.Linear(self.onset_embed_dim, onset_vocab_size)
-        self.rhyme_lm_head = nn.Linear(self.rhyme_tone_embed_dim, rhyme_vocab_size)
-        self.tone_lm_head = nn.Linear(self.rhyme_tone_embed_dim, tone_vocab_size)
-        
+        self.loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 
     def forward(self,
                 input_ids,
                 src_attention_mask,
                 label_ids,
+                shifted_right_label_ids,
                 label_attention_mask,
                 tokenized_ocr,
                 ocr_attention_mask,
@@ -127,25 +116,28 @@ class PhonemeSaL(nn.Module):
                                         input_attention_mask, 
                                         label_attention_mask)
 
+        onset_logits = self.onset_lm_head(decoder_outputs)
+        rhyme_logits = self.rhyme_lm_head(decoder_outputs)
+        tone_logits = self.tone_lm_head(decoder_outputs)
 
-        decoder_outputs = self.shared_lm_head(decoder_outputs)
+        bs, seq_len, vocab_size = onset_logits.shape
+        logits = torch.zeros((bs, seq_len*3, vocab_size))
+        logits[:, ::3, :] = onset_logits
+        logits[:, 1::3, :] = rhyme_logits
+        logits[:, 2::3, :] = tone_logits
 
+        loss = self.loss_fn(logits.reshape((-1, vocab_size)), shifted_right_label_ids.reshape(-1))
 
-        onset_out = decoder_outputs[:, :, :self.onset_embed_dim]  # (batch_size, seq_len, d_model//3 + d_model%3)
-        rhyme_out = decoder_outputs[:, :, self.onset_embed_dim:self.onset_embed_dim+self.rhyme_tone_embed_dim] # (batch_size, seq_len, d_model//3)
-        tone_out = decoder_outputs[:, :, self.onset_embed_dim+self.rhyme_tone_embed_dim:] # (batch_size, seq_len, d_model//3)
+        print(loss)
+        raise
 
-        onset_output = self.onset_lm_head(onset_out)  # (batch_size, seq_len, onset_vocab_size)
-        rhyme_output = self.rhyme_lm_head(rhyme_out)
-        tone_output = self.tone_lm_head(tone_out)
-
-        return onset_output, rhyme_output, tone_output
+        return logits, loss
     
     def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask=None):
         square_subsequent_mask = self._create_square_subsequent_mask(labels.size(1), device=labels.device)
         
-        label_embedding = self.positional_encoding(
-                                self.tgt_tok_emb(labels))
+        label_embedding = self.tgt_tok_emb(labels)
+        label_embedding = self.positional_encoding(label_embedding)
 
         return self.decoder(label_embedding,
                             encoder_outputs,
@@ -153,45 +145,8 @@ class PhonemeSaL(nn.Module):
                             memory_key_padding_mask = encoder_attention_mask,
                             tgt_key_padding_mask = label_attention_mask)
 
-
-    def generate(self,
-                input_ids,
-                src_attention_mask,
-                tokenized_ocr,
-                ocr_attention_mask,
-                ocr_coordinates,
-                ocr_features,
-                tokenized_obj,
-                obj_attention_mask,
-                obj_coordinates,
-                obj_features,
-                max_ocr,
-                max_ques,
-                start_symbol,
-                end_symbol,
-                max_length = 20,
-                isgreedy = True,
-                num_beam = 2):
-
-        
-        return self.greedy_generate(input_ids,
-                                    src_attention_mask,
-                                    tokenized_ocr,
-                                    ocr_attention_mask,
-                                    ocr_coordinates,
-                                    ocr_features,
-                                    tokenized_obj,
-                                    obj_attention_mask,
-                                    obj_coordinates,
-                                    obj_features,
-                                    max_ocr,
-                                    max_ques,
-                                    start_symbol,
-                                    end_symbol,
-                                    max_length)
-
     
-    def greedy_generate(self, 
+    def generate(self, 
                     input_ids,
                     src_attention_mask,
                     tokenized_ocr,
@@ -207,7 +162,6 @@ class PhonemeSaL(nn.Module):
                     start_symbol,
                     end_symbol,
                     max_len=100):
-        
         
         bz = input_ids.size(0)
         DEVICE = input_ids.device
@@ -235,18 +189,14 @@ class PhonemeSaL(nn.Module):
 
         ys = torch.tensor([[[start_symbol, 0, 0]]], dtype=torch.long).repeat(bz, 1, 1).to(DEVICE)
 
-        for i in range(max_len):
+        for _ in range(max_len):
             encoder_outputs = encoder_outputs.to(DEVICE)
 
             out = self.decode(ys, encoder_outputs, input_attention_mask)
-            
-            onset_out = out[:, :, :self.onset_embed_dim]  # (batch_size, seq_len, d_model//3 + d_model%3)
-            rhyme_out = out[:, :, self.onset_embed_dim:self.onset_embed_dim+self.rhyme_tone_embed_dim] # (batch_size, seq_len, d_model//3)
-            tone_out = out[:, :, self.onset_embed_dim+self.rhyme_tone_embed_dim:] # (batch_size, seq_len, d_model//3)
 
-            onset_output = self.onset_lm_head(onset_out)  # (batch_size, seq_len, onset_vocab_size)
-            rhyme_output = self.rhyme_lm_head(rhyme_out)
-            tone_output = self.tone_lm_head(tone_out)
+            onset_output = self.onset_lm_head(out)  # (batch_size, seq_len, onset_vocab_size)
+            rhyme_output = self.rhyme_lm_head(out)
+            tone_output = self.tone_lm_head(out)
 
             next_w_onset = torch.argmax(onset_output[:, -1], dim=-1)
             next_w_rhyme = torch.argmax(rhyme_output[:, -1], dim=-1)
@@ -276,3 +226,4 @@ class PhonemeSaL(nn.Module):
         mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
         return mask
+    
