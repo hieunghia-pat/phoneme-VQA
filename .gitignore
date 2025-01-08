@@ -4,3 +4,4 @@ checkpoints
 *__pyc__
 *__pycache__
 *.sh
+*.bat

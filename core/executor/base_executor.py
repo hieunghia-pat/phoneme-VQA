@@ -3,7 +3,6 @@ import sys
 import json
 import torch
 import math
-import pandas as pd
 from torch.utils.data import DataLoader
 
 from logger.logger import get_logger
@@ -254,7 +253,7 @@ class Base_Executor():
         gens = {}
         gts = {}
         for i, (gts_i, gen_i) in enumerate(zip(answers_gt, answers_gen)):
-            gen_i = ' '.join([k for k, g in itertools.groupby(gen_i)])
+            gen_i = ' '.join([k for k, _ in itertools.groupby(gen_i)])
             gens['%d_' % (i)] = [gen_i, ]
             gts['%d_' % (i)] = [gts_i]
     

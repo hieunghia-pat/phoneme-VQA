@@ -4,12 +4,12 @@ EXECUTOR: "PhonemeSaL_Executor"
 
 vocab_path: "checkpoints/phoneme-sal"
 annotation_paths:
-  - datasets/ViTextVQA-dataset/ViTextVQA_train.json
-  - datasets/ViTextVQA-dataset/ViTextVQA_dev.json
-  - datasets/ViTextVQA-dataset/ViTextVQA_test.json
+  - D:\ViTextVQA-dataset\ViTextVQA_train.json
+  - D:\ViTextVQA-dataset\ViTextVQA_dev.json
+  - D:\ViTextVQA-dataset\ViTextVQA_test.json
 
 ## Training param
-DEVICE: cpu
+DEVICE: cuda
 
 SAVE: TRUE
 SAVE_PATH: "checkpoints/phoneme-sal"
@@ -22,7 +22,7 @@ BETAS:
 warmup_step: 1000
 
 NUM_EPOCHS: 20
-NUM_FREEZE_EPOCH: 0
+NUM_FREEZE_EPOCH: 5
 
 TRAIN_BATCH_SIZE: 16
 EVAL_BATCH_SIZE: 32
@@ -41,16 +41,16 @@ max_obj_length: 128
 max_q_length: 80
 max_a_length: 40
 
-base_ocr_feature_path: "datasets/ViTextVQA-dataset/features/swintext_spotter"
-base_obj_feature_path: "datasets/ViTextVQA-dataset/features/vinvl_vinvl"
+base_ocr_feature_path: D:\ViTextVQA-dataset\features\swintext_spotter
+base_obj_feature_path: D:\ViTextVQA-dataset\features\vinvl_vinvl
 
-qa_train_path: "datasets/ViTextVQA-dataset/train.csv"
-qa_val_path: "datasets/ViTextVQA-dataset/dev.csv"
-qa_predict_path: "datasets/ViTextVQA-dataset/test.csv"
+qa_train_path: D:\ViTextVQA-dataset\train.csv
+qa_val_path: D:\ViTextVQA-dataset\dev.csv
+qa_predict_path: D:\ViTextVQA-dataset\test.csv
 
 context_token: "<c>"
 
-NUMWORKERS: 0
+NUMWORKERS: 16
 
 ## MODEL
 MODEL_CLASS: "PhonemeSaL"

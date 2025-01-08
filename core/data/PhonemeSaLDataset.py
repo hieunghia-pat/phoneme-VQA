@@ -74,16 +74,14 @@ class PhonemeSaLDataset(BaseDataset):
         ocr_features = torch.stack(ocr_features_according_to_ocr_ids\
              + [torch.zeros(self.ocr_hidden)]*(self.max_ocr_length - len(ocr_features_according_to_ocr_ids)))
 
-        label_attention_mask = self.decode_tokenizer.create_mask(self.data['label_ids'][index])
-        word_phrase = torch.tensor(self.data["word_phrase"][index], dtype=torch.int64)
         label_ids = torch.tensor(self.data['label_ids'][index], dtype=torch.int64)
+        label_attention_mask = self.decode_tokenizer.create_mask(label_ids)
 
         return {
             'input_ids': torch.tensor([self.data['input_ids'][index]], dtype=torch.int64).squeeze(0),
             'src_attention_mask': torch.tensor([self.data['src_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'label_ids': label_ids,
-            'word_phrase': word_phrase,
-            'label_attention_mask': torch.tensor(label_attention_mask, dtype=torch.float).squeeze(0),
+            'label_attention_mask': label_attention_mask,
             'tokenized_ocr': torch.tensor([self.data['tokenized_ocr'][index]], dtype=torch.int64).squeeze(0),
             'ocr_attention_mask': torch.tensor([self.data['ocr_attention_mask'][index]], dtype=torch.float).squeeze(0),
             'ocr_coordinates': torch.tensor([self.data['ocr_coordinates'][index]], dtype=torch.float).squeeze(0),
@@ -99,7 +97,6 @@ class PhonemeSaLDataset(BaseDataset):
         self.feature = ['input_ids',
                         'src_attention_mask',
                         'label_ids',
-                        'word_phrase',
                         'label_attention_mask',
                         'tokenized_ocr',
                         'ocr_attention_mask',
@@ -133,7 +130,7 @@ class PhonemeSaLDataset(BaseDataset):
 
             answer = dataframe['answer'][i].strip()
             answer = preprocess_sentence(answer)
-            answer_encoding, word_phrase = self.decode_tokenizer(
+            answer_encoding = self.decode_tokenizer(
                 answer,
                 max_length = self.max_output_length,
             )
@@ -141,7 +138,6 @@ class PhonemeSaLDataset(BaseDataset):
             self.data['input_ids'].append(ques_encoding['input_ids'])
             self.data['src_attention_mask'].append(ques_encoding['attention_mask'])
             self.data['label_ids'].append(answer_encoding)
-            self.data['word_phrase'].append(word_phrase)
 
             self.data['tokenized_ocr'].append(tokenized_ocr)
             self.data['ocr_coordinates'].append(ocr_coordinates)

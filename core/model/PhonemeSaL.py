@@ -8,8 +8,7 @@ from .modules import (
     RelativePositionBias1D, 
     SCPRelativePositionBias,
     RelativePositionBiasAggregated,
-    SinusoidalPositionalEncoding, 
-    PhonemeEmbedding, 
+    SinusoidalPositionalEncoding,
     BaseDecoder 
 )
 
@@ -35,6 +34,7 @@ class PhonemeSaL(nn.Module):
         super().__init__()
 
         self.config = config
+        self.vocab_size = vocab_size
         self.encoder = T52DEncoderModel.from_pretrained(self.config._name_or_path)
         self.encoder.resize_token_embeddings(self.config.new_token_embedding_size)
         
@@ -53,13 +53,12 @@ class PhonemeSaL(nn.Module):
 
         ###### CUSTOM COMPONENTS ######
 
-        self.tgt_tok_emb = PhonemeEmbedding(
-            vocab_size=vocab_size,
-            embed_dim=self.encoder.config.d_model // 3
+        self.tgt_tok_emb = nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=self.encoder.config.d_model
         )
 
-        self.positional_encoding = SinusoidalPositionalEncoding(
-            self.encoder.config.d_model, dropout=0.1)
+        self.positional_encoding = SinusoidalPositionalEncoding(self.encoder.config.d_model, dropout=0.1)
 
         self.decoder = BaseDecoder(
                             emb_size=self.encoder.config.d_model,
@@ -67,9 +66,7 @@ class PhonemeSaL(nn.Module):
                             n_head=self.config.n_head
                         )
 
-        self.onset_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
-        self.rhyme_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
-        self.tone_lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
+        self.lm_head = nn.Linear(self.encoder.config.d_model, vocab_size)
 
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 
@@ -116,26 +113,14 @@ class PhonemeSaL(nn.Module):
                                         input_attention_mask, 
                                         label_attention_mask)
 
-        onset_logits = self.onset_lm_head(decoder_outputs)
-        rhyme_logits = self.rhyme_lm_head(decoder_outputs)
-        tone_logits = self.tone_lm_head(decoder_outputs)
+        logits = self.lm_head(decoder_outputs)
 
-        bs, seq_len, vocab_size = onset_logits.shape
-        logits = torch.zeros((bs, seq_len*3, vocab_size))
-        logits[:, ::3, :] = onset_logits
-        logits[:, 1::3, :] = rhyme_logits
-        logits[:, 2::3, :] = tone_logits
-
-        loss = self.loss_fn(logits.reshape((-1, vocab_size)), shifted_right_label_ids.reshape(-1))
-
-        print(loss)
-        raise
+        loss = self.loss_fn(logits.reshape((-1, self.vocab_size)), shifted_right_label_ids.reshape(-1))
 
         return logits, loss
     
     def decode(self, labels, encoder_outputs, encoder_attention_mask, label_attention_mask=None):
         square_subsequent_mask = self._create_square_subsequent_mask(labels.size(1), device=labels.device)
-        
         label_embedding = self.tgt_tok_emb(labels)
         label_embedding = self.positional_encoding(label_embedding)
 
@@ -187,26 +172,20 @@ class PhonemeSaL(nn.Module):
                 position_bias=position_bias
             ).last_hidden_state
 
-        ys = torch.tensor([[[start_symbol, 0, 0]]], dtype=torch.long).repeat(bz, 1, 1).to(DEVICE)
-
+        ys = torch.tensor([start_symbol], dtype=torch.long).repeat(bz, 1).to(DEVICE)
+        break_signal = torch.zeros_like(ys).fill_(0)
         for _ in range(max_len):
             encoder_outputs = encoder_outputs.to(DEVICE)
 
             out = self.decode(ys, encoder_outputs, input_attention_mask)
 
-            onset_output = self.onset_lm_head(out)  # (batch_size, seq_len, onset_vocab_size)
-            rhyme_output = self.rhyme_lm_head(out)
-            tone_output = self.tone_lm_head(out)
-
-            next_w_onset = torch.argmax(onset_output[:, -1], dim=-1)
-            next_w_rhyme = torch.argmax(rhyme_output[:, -1], dim=-1)
-            next_w_tone = torch.argmax(tone_output[:, -1], dim=-1)
-
-            next_word = torch.stack([next_w_onset, next_w_rhyme, next_w_tone], dim=-1)
+            onset_output = self.lm_head(out)  # (batch_size, seq_len, onset_vocab_size)
+            next_word = torch.argmax(onset_output[:, -1], dim=-1)
+            break_signal = torch.where(next_word == end_symbol, 1, break_signal)
 
             ys = torch.cat([ys, next_word.unsqueeze(1)], dim=1)
 
-            if torch.any(ys[:,:,0] == end_symbol, dim=1).sum() == bz:
+            if torch.all(break_signal):
                 break
 
         return ys

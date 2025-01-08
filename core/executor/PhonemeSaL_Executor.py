@@ -32,7 +32,6 @@ class PhonemeSaL_Executor(Base_Executor):
             with tqdm(dataloader, desc="Inferring") as pb:
                 for batch in dataloader:
                     input_ids = batch['input_ids'].to(self.config.DEVICE)
-                    word_phrases = batch["word_phrase"].to(self.config.DEVICE)
                     src_attention_mask = batch['src_attention_mask'].to(self.config.DEVICE)
                     ocr_attention_mask = batch['ocr_attention_mask'].to(self.config.DEVICE)
                     tokenized_ocr = batch['tokenized_ocr'].to(self.config.DEVICE)
@@ -54,14 +53,14 @@ class PhonemeSaL_Executor(Base_Executor):
                         obj_attention_mask,
                         obj_coordinates,
                         obj_features,
-                        start_symbol = self.decode_tokenizer.bos_id,
-                        end_symbol = self.decode_tokenizer.eos_id,
+                        start_symbol = self.decode_tokenizer.bos_idx,
+                        end_symbol = self.decode_tokenizer.eos_idx,
                         max_ocr=self.config.max_ocr_length,
                         max_ques=self.config.max_q_length,
-                        max_length = max_length
+                        max_len = max_length
                     )
 
-                    decoded_preds += self.decode_tokenizer.batch_decode(pred.tolist(), word_phrases)
+                    decoded_preds += self.decode_tokenizer.batch_decode(pred)
 
                 pb.update()
 
